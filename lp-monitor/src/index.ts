@@ -11,8 +11,12 @@ import path from 'path';
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
+    winston.format.timestamp({
+      format: 'YYYY-MM-DD HH:mm:ss,SSS'
+    }),
+    winston.format.printf((info: winston.LogEntry) => {
+      return `${info.timestamp} - main - ${info.level.toUpperCase()} - ${info.message}`;
+    })
   ),
   transports: [
     new winston.transports.File({ 
@@ -22,8 +26,12 @@ const logger = winston.createLogger({
     }),
     new winston.transports.Console({
       format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
+        winston.format.timestamp({
+          format: 'YYYY-MM-DD HH:mm:ss,SSS'
+        }),
+        winston.format.printf((info: winston.LogEntry) => {
+          return `${info.timestamp} - main - ${info.level.toUpperCase()} - ${info.message}`;
+        })
       )
     })
   ]
