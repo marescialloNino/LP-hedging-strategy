@@ -4,33 +4,57 @@ import { retrieveMeteoraPositions } from './services/meteoraPositionService';
 import { retrieveKrystalPositions } from './services/krystalPositionService';
 import { generateMeteoraCSV, generateAndWriteLiquidityProfileCSV, generateKrystalCSV, writeMeteoraLatestCSV, writeKrystalLatestCSV } from './services/csvService';
 import { PositionInfo } from './services/types';
+import winston from 'winston';
+import path from 'path';
+
+// Configure Winston logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ 
+      filename: path.join(__dirname, '../../logs/lp-monitor.log'),
+      maxsize: 5242880, // 5MB
+      maxFiles: 5,
+    }),
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      )
+    })
+  ]
+});
 
 async function processSolanaWallet(walletAddress: string): Promise<any[]> {
-  console.log(`Processing Solana wallet: ${walletAddress}`);
+  logger.info(`Processing Solana wallet: ${walletAddress}`);
   const meteoraPositions = await retrieveMeteoraPositions(walletAddress);
   if (meteoraPositions.length > 0) {
     const records = await generateMeteoraCSV(walletAddress, meteoraPositions);
     return records;
   } else {
-    console.log(`No Meteora positions found for ${walletAddress}`);
+    logger.info(`No Meteora positions found for ${walletAddress}`);
     return [];
   }
 }
 
 async function processEvmWallet(walletAddress: string): Promise<any[]> {
-  console.log(`Processing EVM wallet: ${walletAddress}`);
+  logger.info(`Processing EVM wallet: ${walletAddress}`);
   const krystalPositions = await retrieveKrystalPositions(walletAddress);
   if (krystalPositions.length > 0) {
     const records = await generateKrystalCSV(walletAddress, krystalPositions);
     return records;
   } else {
-    console.log(`No Krystal positions found for ${walletAddress}`);
+    logger.info(`No Krystal positions found for ${walletAddress}`);
     return [];
   }
 }
 
 async function main() {
-  console.log('Starting lp-monitor batch process...');
+  logger.info('Starting lp-monitor batch process...');
 
   // Accumulate records for latest CSVs
   let allMeteoraRecords: any[] = [];
@@ -45,9 +69,9 @@ async function main() {
   // Write all Meteora latest positions
   if (allMeteoraRecords.length > 0) {
     await writeMeteoraLatestCSV(allMeteoraRecords);
-    console.log(`Wrote ${allMeteoraRecords.length} Meteora positions to latest CSV`);
+    logger.info(`Wrote ${allMeteoraRecords.length} Meteora positions to latest CSV`);
   } else {
-    console.log('No Meteora positions found across all wallets');
+    logger.info('No Meteora positions found across all wallets');
   }
 
   // Process EVM wallets
@@ -59,9 +83,9 @@ async function main() {
   // Write all Krystal latest positions
   if (allKrystalRecords.length > 0) {
     await writeKrystalLatestCSV(allKrystalRecords);
-    console.log(`Wrote ${allKrystalRecords.length} Krystal positions to latest CSV`);
+    logger.info(`Wrote ${allKrystalRecords.length} Krystal positions to latest CSV`);
   } else {
-    console.log('No Krystal positions found across all wallets');
+    logger.info('No Krystal positions found across all wallets');
   }
 
   // Write combined liquidity profile for all Meteora positions
@@ -69,15 +93,15 @@ async function main() {
     const allMeteoraPositions = await retrieveMeteoraPositions(config.SOLANA_WALLET_ADDRESSES.join(',')); // Adjust if needed
     await generateAndWriteLiquidityProfileCSV('all_wallets', allMeteoraPositions);
   } else {
-    console.log('No Meteora positions found across all wallets for liquidity profile');
+    logger.info('No Meteora positions found across all wallets for liquidity profile');
   }
 
-  console.log('Batch process completed.');
+  logger.info('Batch process completed.');
 }
 
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error('Error in batch process:', error);
+    logger.error('Error in batch process:', { error: error.message, stack: error.stack });
     process.exit(1);
   });
