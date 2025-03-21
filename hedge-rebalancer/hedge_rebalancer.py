@@ -4,6 +4,19 @@ import os
 from constants import HEDGABLE_TOKENS, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGE_LATEST_CSV
 from datetime import datetime
 import csv
+import logging
+import sys
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('hedge_rebalancer.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 def calculate_hedge_quantities():
     """Calculate total hedged quantities from Bitget positions by symbol (always negative)."""
@@ -17,9 +30,9 @@ def calculate_hedge_quantities():
                 if symbol in HEDGABLE_TOKENS:
                     hedge_quantities[symbol] += qty  # Accumulate negative quantities
         except Exception as e:
-            print(f"Error reading {HEDGE_LATEST_CSV}: {e}")
+            logger.error(f"Error reading {HEDGE_LATEST_CSV}: {e}")
     else:
-        print(f"{HEDGE_LATEST_CSV} not found.")
+        logger.warning(f"{HEDGE_LATEST_CSV} not found.")
     return hedge_quantities
 
 def calculate_lp_quantities():
@@ -42,9 +55,9 @@ def calculate_lp_quantities():
                     if token_y in info["addresses"]:
                         lp_quantities[symbol] += qty_y
         except Exception as e:
-            print(f"Error reading {METEORA_LATEST_CSV}: {e}")
+            logger.error(f"Error reading {METEORA_LATEST_CSV}: {e}")
     else:
-        print(f"{METEORA_LATEST_CSV} not found.")
+        logger.warning(f"{METEORA_LATEST_CSV} not found.")
 
     # Read Krystal LP positions
     if os.path.exists(KRYSTAL_LATEST_CSV):
@@ -62,15 +75,15 @@ def calculate_lp_quantities():
                     if token_y in info["addresses"]:
                         lp_quantities[symbol] += qty_y
         except Exception as e:
-            print(f"Error reading {KRYSTAL_LATEST_CSV}: {e}")
+            logger.error(f"Error reading {KRYSTAL_LATEST_CSV}: {e}")
     else:
-        print(f"{KRYSTAL_LATEST_CSV} not found.")
+        logger.warning(f"{KRYSTAL_LATEST_CSV} not found.")
     
     return lp_quantities
 
 def check_hedge_rebalance():
     """Compare LP quantities with absolute hedge quantities and output results to console and CSV."""
-    print("Starting hedge-rebalancer...")
+    logger.info("Starting hedge-rebalancer...")
 
     # Calculate quantities
     hedge_quantities = calculate_hedge_quantities()  # Negative values
@@ -95,26 +108,26 @@ def check_hedge_rebalance():
         if lp_qty == 0 and hedge_qty == 0:
             continue
 
-        # Console output
-        print(f"Token: {symbol}")
-        print(f"  LP Qty: {lp_qty}, Hedged Qty: {hedge_qty} (Short: {abs_hedge_qty})")
-        print(f"  Difference: {difference} ({percentage_diff:.2f}% of LP)")
+        # Log output
+        logger.info(f"Token: {symbol}")
+        logger.info(f"  LP Qty: {lp_qty}, Hedged Qty: {hedge_qty} (Short: {abs_hedge_qty})")
+        logger.info(f"  Difference: {difference} ({percentage_diff:.2f}% of LP)")
 
         # Determine rebalance action
         rebalance_action = ""
         if lp_qty > 0 and abs_difference > 0.1 * lp_qty:
             if difference > 0:
                 rebalance_action = f"INCRESE SHORT {abs_difference:.5f}"
-                print(f"  *** REBALANCE SIGNAL: {rebalance_action} for {symbol} ***")
+                logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} for {symbol} ***")
             else:
                 rebalance_action = f"DECREASE SHORT {abs_difference:.5f}"
-                print(f"  *** REBALANCE SIGNAL: {rebalance_action} for {symbol} ***")
+                logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} for {symbol} ***")
         elif lp_qty == 0 and hedge_qty != 0:
             rebalance_action = f"CLOSE SHORT"
-            print(f"  *** REBALANCE SIGNAL: {rebalance_action} for {symbol} (no LP exposure) ***")
+            logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} for {symbol} (no LP exposure) ***")
         else:
             rebalance_action = "NO REBALANCE"
-            print(f"  No rebalance needed for {symbol}")
+            logger.info(f"  No rebalance needed for {symbol}")
 
         # Add to results
         rebalance_results.append({
@@ -138,9 +151,9 @@ def check_hedge_rebalance():
             writer = csv.DictWriter(f, fieldnames=headers)
             writer.writeheader()
             writer.writerows(rebalance_results)
-        print(f"Rebalancing results written to {csv_filename}")
+        logger.info(f"Rebalancing results written to {csv_filename}")
 
-    print("Hedge rebalance check completed.")
+    logger.info("Hedge rebalance check completed.")
 
 if __name__ == "__main__":
     check_hedge_rebalance()
