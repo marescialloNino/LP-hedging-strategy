@@ -5,6 +5,7 @@ import { retrieveKrystalPositions } from './services/krystalPositionService';
 import { generateMeteoraCSV, generateAndWriteLiquidityProfileCSV, generateKrystalCSV, writeMeteoraLatestCSV, writeKrystalLatestCSV } from './services/csvService';
 import { PositionInfo } from './services/types';
 import winston from 'winston';
+import { TransformableInfo } from 'logform'; // Import TransformableInfo from logform
 import path from 'path';
 
 // Configure Winston logger
@@ -14,8 +15,9 @@ const logger = winston.createLogger({
     winston.format.timestamp({
       format: 'YYYY-MM-DD HH:mm:ss,SSS'
     }),
-    winston.format.printf((info: winston.LogEntry) => {
-      return `${info.timestamp} - main - ${info.level.toUpperCase()} - ${info.message}`;
+    winston.format.printf((info: TransformableInfo) => {
+      const message = typeof info.message === 'string' ? info.message : String(info.message);
+      return `${info.timestamp} - main - ${info.level.toUpperCase()} - ${message}`;
     })
   ),
   transports: [
@@ -29,8 +31,9 @@ const logger = winston.createLogger({
         winston.format.timestamp({
           format: 'YYYY-MM-DD HH:mm:ss,SSS'
         }),
-        winston.format.printf((info: winston.LogEntry) => {
-          return `${info.timestamp} - main - ${info.level.toUpperCase()} - ${info.message}`;
+        winston.format.printf((info: TransformableInfo) => {
+          const message = typeof info.message === 'string' ? info.message : String(info.message);
+          return `${info.timestamp} - main - ${info.level.toUpperCase()} - ${message}`;
         })
       )
     })
