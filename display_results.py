@@ -66,9 +66,9 @@ def main():
                 pair_ticker,
                 row["Token X Qty"],
                 row["Token Y Qty"],
-                f"{row['Current Price']:.4f}" if pd.notna(row["Current Price"]) else "N/A",
-                f"{row['Min Price']:.4f}" if pd.notna(row["Min Price"]) else "N/A",
-                f"{row['Max Price']:.4f}" if pd.notna(row["Max Price"]) else "N/A",
+                f"{row['Current Price']:.6f}" if pd.notna(row["Current Price"]) else "N/A",
+                f"{row['Min Price']:.6f}" if pd.notna(row["Min Price"]) else "N/A",
+                f"{row['Max Price']:.6f}" if pd.notna(row["Max Price"]) else "N/A",
                 "Yes" if row["Is In Range"] else "No",
                 f"{row['Fee APR']:.2%}" if pd.notna(row["Fee APR"]) else "N/A",
                 f"{row['Initial Value USD']:.2f}" if pd.notna(row["Initial Value USD"]) else "N/A",
@@ -91,8 +91,8 @@ def main():
                 row["Token X Qty"],
                 row["Token Y Qty"],
                 "N/A",  # Current price not available
-                f"{row['Lower Boundary']:.4f}" if pd.notna(row["Lower Boundary"]) else "N/A",
-                f"{row['Upper Boundary']:.4f}" if pd.notna(row["Upper Boundary"]) else "N/A",
+                f"{row['Lower Boundary']:.6f}" if pd.notna(row["Lower Boundary"]) else "N/A",
+                f"{row['Upper Boundary']:.6f}" if pd.notna(row["Upper Boundary"]) else "N/A",
                 "Yes" if row["Is In Range"] else "No",
                 "N/A",  # Fee APR not available
                 "N/A",  # Initial USD not available
@@ -141,11 +141,11 @@ def main():
             hedge_amount = row["amount"]
             token_data.append([
                 token,
-                f"{lp_qty:.2f}",
-                f"{hedged_qty:.2f}",
-                f"{hedge_amount:.2f}",
-                f"{difference:.2f}",
-                f"{rebalance_value:.2f}",
+                f"{lp_qty:.4f}",
+                f"{hedged_qty:.4f}",
+                f"{hedge_amount:.4f}",
+                f"{difference:.4f}",
+                f"{rebalance_value:.4f}",
                 put_buttons([{'label': 'Hedge', 'value': token, 'color': 'primary'}], 
                            onclick=lambda t, rv=rebalance_value: execute_hedge_trade(t, rv))
             ])
