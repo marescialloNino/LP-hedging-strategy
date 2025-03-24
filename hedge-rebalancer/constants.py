@@ -10,12 +10,12 @@ HEDGABLE_TOKENS = {
     "AAVEUSDT": {"addresses" : ["0xd6df932a45c0f255f85145f286ea0b292b21c90b"]},
      # BSC
     "BNBUSDT" : {"addresses" : ["0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]},
-    "CAKEUSDT" : {"addresses" : ["0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82"]},
+    "CAKEUSDT" : {"addresses" : ["0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82"]},
     # Arbitrum
     "ZROUSDT" : {"addresses" : ["0x6985884c4392d348587b19cb9eaaf157f13271cd"]},
     "GMXUSDT" : {"addresses" : ["0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a"]},
     # Sonic
-    "SONICUSDT": {"addresses" : ["0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38"]},
+    # "SONICUSDT": {"addresses" : ["0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38"]},
 
 
     # Solana
