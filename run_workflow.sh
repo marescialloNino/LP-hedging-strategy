@@ -60,7 +60,7 @@ check_status "Bitget position fetcher execution"
 # Step 3: Run hedge rebalancer (using stat39 env)
 log_message "Step 3: Running hedge rebalancer..."
 cd "$BASE_DIR/hedge-rebalancer"
-python3 bitget_position_fetcher.py >> "$LOG_FILE" 2>&1
+python3 hedge_rebalancer.py >> "$LOG_FILE" 2>&1
 check_status "Hedge rebalancer execution"
 
 # Deactivate Conda environment (optional)
