@@ -99,7 +99,8 @@ def check_hedge_rebalance():
 
     # Prepare rebalancing results
     rebalance_results = []
-    timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')  # Fixed format with : instead of -
+    timestamp_for_csv = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')  # For CSV content
+    timestamp_for_filename = datetime.utcnow().strftime('%Y%m%d_%H%M%S')  # For filename
 
     # Compare and signal rebalance
     for symbol in HEDGABLE_TOKENS:
@@ -143,9 +144,9 @@ def check_hedge_rebalance():
             rebalance_value = 0.0
             logger.info(f"  No rebalance needed for {symbol}")
 
-        # Add to results
+        # Add to results with the colon-formatted timestamp
         rebalance_results.append({
-            "Timestamp": timestamp,
+            "Timestamp": timestamp_for_csv,  # Use colon format in the data
             "Token": symbol,
             "LP Qty": lp_qty,
             "Hedged Qty": hedge_qty,
@@ -160,9 +161,8 @@ def check_hedge_rebalance():
         output_dir = data_dir  # Use centralized data directory
         os.makedirs(output_dir, exist_ok=True)
         
-        # Timestamped file for history
-        history_filename = f"{output_dir}/rebalancing_results_{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')}.csv"
-        # Latest file (without timestamp)
+        # Use underscore format for filenames
+        history_filename = f"{output_dir}/rebalancing_results_{timestamp_for_filename}.csv"
         latest_filename = f"{output_dir}/rebalancing_results.csv"
         
         headers = ["Timestamp", "Token", "LP Qty", "Hedged Qty", "Difference", "Percentage Diff", "Rebalance Action", "Rebalance Value"]

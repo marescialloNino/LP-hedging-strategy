@@ -9,9 +9,9 @@ import { TransformableInfo } from 'logform'; // Import TransformableInfo from lo
 import path from 'path';
 import fs from 'fs';
 
-// Get log directory from environment or use default
-const logDir = process.env.LP_HEDGE_LOG_DIR || '../../logs';
-const dataDir = process.env.LP_HEDGE_DATA_DIR || '../../lp-data';
+// Get log directory from environment or use default with absolute path
+const logDir = process.env.LP_HEDGE_LOG_DIR || path.join(process.cwd(), 'logs');
+const dataDir = process.env.LP_HEDGE_DATA_DIR || path.join(process.cwd(), 'lp-data');
 
 // Create directories if they don't exist (using sync functions for startup)
 try {
@@ -25,7 +25,7 @@ try {
   console.error('Error creating directories:', error);
 }
 
-// Configure Winston logger
+// Configure Winston logger with absolute paths
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -55,6 +55,17 @@ const logger = winston.createLogger({
       )
     })
   ]
+});
+
+// Add uncaught exception and unhandled rejection handlers
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', { error: error.message, stack: error.stack });
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection:', { reason, promise });
+  process.exit(1);
 });
 
 async function processSolanaWallet(walletAddress: string): Promise<any[]> {
