@@ -46,8 +46,8 @@ def main():
 
     # Define headers for the table
     wallet_headers = [
-        "Source", "Wallet", "Chain", "Protocol", "Pair", "Max Price", "Min Price",
-        "Fee APR", "In Range", "Initial USD", "Present USD", "Pool Address"
+        "Source", "Wallet", "Chain", "Protocol", "Pair", "Token X Qty", "Token X Qty","Current Price", "Min Price", "Max Price",
+        "In Range", "Fee APR", "Initial USD", "Present USD", "Pool Address"
     ]
     wallet_data = []
 
@@ -64,10 +64,13 @@ def main():
                 row["Chain"],
                 row["Protocol"],
                 pair_ticker,
-                f"{row['Max Price']:.4f}" if pd.notna(row["Max Price"]) else "N/A",
+                row["Token X Qty"],
+                row["Token Y Qty"],
+                f"{row['Current Price']:.4f}" if pd.notna(row["Current Price"]) else "N/A",
                 f"{row['Min Price']:.4f}" if pd.notna(row["Min Price"]) else "N/A",
-                f"{row['Fee APR']:.2%}" if pd.notna(row["Fee APR"]) else "N/A",
+                f"{row['Max Price']:.4f}" if pd.notna(row["Max Price"]) else "N/A",
                 "Yes" if row["Is In Range"] else "No",
+                f"{row['Fee APR']:.2%}" if pd.notna(row["Fee APR"]) else "N/A",
                 f"{row['Initial Value USD']:.2f}" if pd.notna(row["Initial Value USD"]) else "N/A",
                 f"{row['Actual Value USD']:.2f}" if pd.notna(row["Actual Value USD"]) else "N/A",
                 row["Pool Address"]
@@ -85,10 +88,13 @@ def main():
                 "Solana",
                 "Meteora",
                 pair_ticker,
-                f"{row['Upper Boundary']:.4f}" if pd.notna(row["Upper Boundary"]) else "N/A",
+                row["Token X Qty"],
+                row["Token Y Qty"],
+                "N/A",  # Current price not available
                 f"{row['Lower Boundary']:.4f}" if pd.notna(row["Lower Boundary"]) else "N/A",
-                "N/A",  # Fee APR not available
+                f"{row['Upper Boundary']:.4f}" if pd.notna(row["Upper Boundary"]) else "N/A",
                 "Yes" if row["Is In Range"] else "No",
+                "N/A",  # Fee APR not available
                 "N/A",  # Initial USD not available
                 "N/A",  # Present USD not available
                 row["Pool Address"]
