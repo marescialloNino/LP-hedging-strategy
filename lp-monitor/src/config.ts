@@ -1,7 +1,9 @@
 // src/config.ts
 import dotenv from 'dotenv';
+import path from 'path';
 
-dotenv.config();
+// Load .env file from one directory level up (parent of lp-monitor)
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 export const config = {
   SOLANA_WALLET_ADDRESSES: process.env.SOLANA_WALLET_ADDRESSES
@@ -10,7 +12,6 @@ export const config = {
   EVM_WALLET_ADDRESSES: process.env.EVM_WALLET_ADDRESSES
     ? process.env.EVM_WALLET_ADDRESSES.split(',').map(addr => addr.trim())
     : [],
-  SCHEDULE_INTERVAL: parseInt(process.env.SCHEDULE_INTERVAL || '30', 10),
   RPC_ENDPOINT: process.env.RPC_ENDPOINT || 'https://api.mainnet-beta.solana.com', // Default Solana mainnet
   KRYSTAL_CHAIN_IDS: process.env.KRYSTAL_CHAIN_IDS
   ? process.env.KRYSTAL_CHAIN_IDS.split(',').map(id => id.trim())

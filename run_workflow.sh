@@ -2,6 +2,7 @@
 
 # Base directory
 BASE_DIR="$HOME/LP-hedging-strategy"
+
 # Set up logging with absolute path
 LOG_DIR="$BASE_DIR/logs"
 mkdir -p "$LOG_DIR"  # Create logs directory upfront
@@ -30,26 +31,41 @@ check_status() {
 export LP_HEDGE_LOG_DIR="$LOG_DIR"
 export LP_HEDGE_DATA_DIR="$DATA_DIR"
 
+# Initialize Conda (using your Miniforge3 installation path)
+CONDA_BASE="/home/cricri/miniforge3"
+source "$CONDA_BASE/etc/profile.d/conda.sh"
+check_status "Conda initialization"
+
 # Start the workflow
 log_message "Starting LP hedging workflow..."
 
-# Step 1: Run LP monitor
+# Step 1: Run LP monitor (Node.js, no Conda needed)
 log_message "Step 1: Running LP monitor..."
 cd "$BASE_DIR/lp-monitor"
 NODE_ENV=production npm start >> "$LOG_FILE" 2>&1
 check_status "LP monitor execution"
 
-# Step 2: Run Bitget position fetcher
+# Activate the Conda environment 'stat39'
+CONDA_ENV="stat39"
+log_message "Activating Conda environment: $CONDA_ENV"
+conda activate "$CONDA_ENV"
+check_status "Conda environment activation"
+
+# Step 2: Run Bitget position fetcher (using stat39 env)
 log_message "Step 2: Running Bitget position fetcher..."
 cd "$BASE_DIR/hedge-monitoring"
 python3 bitget_position_fetcher.py >> "$LOG_FILE" 2>&1
 check_status "Bitget position fetcher execution"
 
-# Step 3: Run hedge rebalancer
+# Step 3: Run hedge rebalancer (using stat39 env)
 log_message "Step 3: Running hedge rebalancer..."
 cd "$BASE_DIR/hedge-rebalancer"
-python3 hedge_rebalancer.py >> "$LOG_FILE" 2>&1
+python3 bitget_position_fetcher.py >> "$LOG_FILE" 2>&1
 check_status "Hedge rebalancer execution"
+
+# Deactivate Conda environment (optional)
+log_message "Deactivating Conda environment"
+conda deactivate
 
 # Workflow completed
 log_message "Workflow completed successfully!"
