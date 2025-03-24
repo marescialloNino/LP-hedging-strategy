@@ -1,26 +1,24 @@
 // src/services/krystalPositionService.ts
 import { fetchKrystalPositions } from '../dexes/krystalAdapter';
 import { KrystalPositionInfo } from './types';
-import axios from 'axios';
-import { logger } from '../utils/logger';
+import { config } from '../config';
+import { logger } from '../utils/logger'; // Import logger from utils/logger
 
-// Add chain IDs constant
-const CHAIN_IDS = ['56', '42161']; // BSC and Arbitrum
-
-export async function retrieveKrystalPositions(walletAddress: string): Promise<any[]> {
+export async function retrieveKrystalPositions(walletAddress: string): Promise<KrystalPositionInfo[]> {
   try {
-    // Join chain IDs with commas
-    const chainIdsParam = CHAIN_IDS.join(',');
-    const response = await axios.get(`https://api.krystal.app/v1/lp/userPositions`, {
-      params: {
-        walletAddress,
-        chainIds: chainIdsParam  // Add chainIds parameter
-      }
-    });
-    
-    return response.data?.data || [];
+    // Use chain IDs from config
+    const chainIds = config.KRYSTAL_CHAIN_IDS.join(',');
+    logger.info(`Fetching Krystal positions for wallet ${walletAddress} on chains: ${chainIds}`);
+
+    const positions = await fetchKrystalPositions(walletAddress, chainIds);
+    if (positions.length === 0) {
+      logger.info(`No Krystal positions found for wallet ${walletAddress} on chains ${chainIds}`);
+    } else {
+      logger.info(`Retrieved ${positions.length} Krystal positions for wallet ${walletAddress}`);
+    }
+    return positions;
   } catch (error) {
-    logger.error(`Error fetching Krystal positions: ${error}`);
+    logger.error(`Error fetching Krystal positions for wallet ${walletAddress}: ${error}`);
     return [];
   }
 }

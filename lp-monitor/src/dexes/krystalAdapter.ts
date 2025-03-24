@@ -28,25 +28,31 @@ interface KrystalApiResponse {
   positions: KrystalApiPosition[];
 }
 
-export async function fetchKrystalPositions(walletAddress: string): Promise<KrystalPositionInfo[]> {
+export async function fetchKrystalPositions(walletAddress: string, chainIds: string = '137'): Promise<KrystalPositionInfo[]> {
   const baseUrl = 'https://api.krystal.app/all/v1/lp/userPositions';
   const params = {
     addresses: walletAddress,
-    chainIds: '137', // Polygon for now
+    chainIds: chainIds, // Use the passed chainIds parameter
     limit: 100,
     orderBy: 'liquidity',
   };
 
   try {
-    const response = await axios.get<KrystalApiResponse>(baseUrl, { params, headers: { 'accept': 'application/json' } });
+    const response = await axios.get<KrystalApiResponse>(baseUrl, {
+      params,
+      headers: { 'accept': 'application/json' },
+    });
     const data = response.data;
 
     if (!data.positions || data.positions.length === 0) {
-      console.log('No LP positions returned from Krystal API.');
+      console.log(`No LP positions returned from Krystal API for wallet ${walletAddress} on chains ${chainIds}`);
       return [];
     }
 
-    const totalFeeEarnedUsd = data.statsByChain['137']?.totalFeeEarned || 0;
+    // Aggregate totalFeeEarnedUsd across specified chains
+    const totalFeeEarnedUsd = Object.keys(data.statsByChain)
+      .filter(chainId => chainIds.split(',').includes(chainId))
+      .reduce((sum, chainId) => sum + (data.statsByChain[chainId]?.totalFeeEarned || 0), 0);
 
     const krystalPositions: KrystalPositionInfo[] = data.positions.map((pos: KrystalApiPosition) => {
       const tokenX = pos.currentAmounts[0] || { token: { address: '', symbol: 'Unknown', decimals: 0 }, balance: '0' };
@@ -86,10 +92,10 @@ export async function fetchKrystalPositions(walletAddress: string): Promise<Krys
       };
     });
 
-    console.log(`Fetched ${krystalPositions.length} LP positions from Krystal API for wallet ${walletAddress}`);
+    console.log(`Fetched ${krystalPositions.length} LP positions from Krystal API for wallet ${walletAddress} on chains ${chainIds}`);
     return krystalPositions;
   } catch (error) {
-    console.error('Error fetching positions from Krystal API:', error);
+    console.error(`Error fetching positions from Krystal API for wallet ${walletAddress} on chains ${chainIds}:`, error);
     return [];
   }
 }

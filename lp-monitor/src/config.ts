@@ -12,4 +12,7 @@ export const config = {
     : [],
   SCHEDULE_INTERVAL: parseInt(process.env.SCHEDULE_INTERVAL || '30', 10),
   RPC_ENDPOINT: process.env.RPC_ENDPOINT || 'https://api.mainnet-beta.solana.com', // Default Solana mainnet
+  KRYSTAL_CHAIN_IDS: process.env.KRYSTAL_CHAIN_IDS
+  ? process.env.KRYSTAL_CHAIN_IDS.split(',').map(id => id.trim())
+  : ['137','56','42161'], // Default to Polygon (chain ID 137), add more as needed
 };

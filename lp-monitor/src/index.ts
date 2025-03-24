@@ -3,59 +3,21 @@ import { config } from './config';
 import { retrieveMeteoraPositions } from './services/meteoraPositionService';
 import { retrieveKrystalPositions } from './services/krystalPositionService';
 import { generateMeteoraCSV, generateAndWriteLiquidityProfileCSV, generateKrystalCSV, writeMeteoraLatestCSV, writeKrystalLatestCSV } from './services/csvService';
-import { PositionInfo } from './services/types';
-import winston from 'winston';
-import { TransformableInfo } from 'logform'; // Import TransformableInfo from logform
+import { logger } from './utils/logger'; // Import logger from utils/logger
 import path from 'path';
 import fs from 'fs';
 
-// Get log directory from environment or use default with absolute path
-const logDir = process.env.LP_HEDGE_LOG_DIR || path.join(process.cwd(), 'logs');
-const dataDir = process.env.LP_HEDGE_DATA_DIR || path.join(process.cwd(), 'lp-data');
+// Get data directory from environment or use default with absolute path
+const dataDir = process.env.LP_HEDGE_DATA_DIR || path.join(process.cwd(), '../lp-data');
 
-// Create directories if they don't exist (using sync functions for startup)
+// Create data directory if it doesn't exist (using sync functions for startup)
 try {
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
-  }
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
 } catch (error) {
-  console.error('Error creating directories:', error);
+  console.error('Error creating data directory:', error);
 }
-
-// Configure Winston logger with absolute paths
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp({
-      format: 'YYYY-MM-DD HH:mm:ss,SSS'
-    }),
-    winston.format.printf((info: TransformableInfo) => {
-      const message = typeof info.message === 'string' ? info.message : String(info.message);
-      return `${info.timestamp} - main - ${info.level.toUpperCase()} - ${message}`;
-    })
-  ),
-  transports: [
-    new winston.transports.File({ 
-      filename: path.join(logDir, 'lp-monitor.log'),
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
-    }),
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.timestamp({
-          format: 'YYYY-MM-DD HH:mm:ss,SSS'
-        }),
-        winston.format.printf((info: TransformableInfo) => {
-          const message = typeof info.message === 'string' ? info.message : String(info.message);
-          return `${info.timestamp} - main - ${info.level.toUpperCase()} - ${message}`;
-        })
-      )
-    })
-  ]
-});
 
 // Add uncaught exception and unhandled rejection handlers
 process.on('uncaughtException', (error) => {
