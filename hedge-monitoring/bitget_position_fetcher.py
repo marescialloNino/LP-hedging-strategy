@@ -7,12 +7,20 @@ import csv
 from datetime import datetime
 import logging
 
+# Get log directory from environment or use default
+log_dir = os.getenv('LP_HEDGE_LOG_DIR', './logs')
+data_dir = os.getenv('LP_HEDGE_DATA_DIR', './lp-data')
+
+# Create directories if they don't exist
+os.makedirs(log_dir, exist_ok=True)
+os.makedirs(data_dir, exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('bitget_position_fetcher.log'),
+        logging.FileHandler(os.path.join(log_dir, 'bitget_position_fetcher.log')),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -59,7 +67,7 @@ async def fetch_and_print_positions():
         headers = ["timestamp", "symbol", "quantity", "amount", "entry_price"]
 
         # Write to historical CSV (append mode)
-        history_file = "./lp-data/hedging_positions_history.csv"
+        history_file = os.path.join(data_dir, "hedging_positions_history.csv")
         file_exists = os.path.isfile(history_file)
         with open(history_file, mode='a', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=headers)
@@ -69,7 +77,8 @@ async def fetch_and_print_positions():
         logger.info(f"Appended {len(position_data)} positions to historical CSV")
 
         # Write to latest CSV (overwrite mode)
-        with open("./lp-data/hedging_positions_latest.csv", mode='w', newline='') as f:
+        latest_file = os.path.join(data_dir, "hedging_positions_latest.csv")
+        with open(latest_file, mode='w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=headers)
             writer.writeheader()
             writer.writerows(position_data)

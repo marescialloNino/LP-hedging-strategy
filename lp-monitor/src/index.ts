@@ -7,6 +7,23 @@ import { PositionInfo } from './services/types';
 import winston from 'winston';
 import { TransformableInfo } from 'logform'; // Import TransformableInfo from logform
 import path from 'path';
+import fs from 'fs';
+
+// Get log directory from environment or use default
+const logDir = process.env.LP_HEDGE_LOG_DIR || '../../logs';
+const dataDir = process.env.LP_HEDGE_DATA_DIR || '../../lp-data';
+
+// Create directories if they don't exist (using sync functions for startup)
+try {
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+} catch (error) {
+  console.error('Error creating directories:', error);
+}
 
 // Configure Winston logger
 const logger = winston.createLogger({
@@ -22,7 +39,7 @@ const logger = winston.createLogger({
   ),
   transports: [
     new winston.transports.File({ 
-      filename: path.join(__dirname, '../../logs/lp-monitor.log'),
+      filename: path.join(logDir, 'lp-monitor.log'),
       maxsize: 5242880, // 5MB
       maxFiles: 5,
     }),

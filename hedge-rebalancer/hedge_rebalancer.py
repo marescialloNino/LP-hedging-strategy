@@ -7,12 +7,20 @@ import csv
 import logging
 import sys
 
+# Get log directory from environment or use default
+log_dir = os.getenv('LP_HEDGE_LOG_DIR', './logs')
+data_dir = os.getenv('LP_HEDGE_DATA_DIR', './lp-data')
+
+# Create directories if they don't exist
+os.makedirs(log_dir, exist_ok=True)
+os.makedirs(data_dir, exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('hedge_rebalancer.log'),
+        logging.FileHandler(os.path.join(log_dir, 'hedge_rebalancer.log')),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -91,7 +99,7 @@ def check_hedge_rebalance():
 
     # Prepare rebalancing results
     rebalance_results = []
-    timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H-%M-%S')  # e.g., 2025-03-20T12-00-00
+    timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')  # Fixed format with : instead of -
 
     # Compare and signal rebalance
     for symbol in HEDGABLE_TOKENS:
@@ -113,20 +121,26 @@ def check_hedge_rebalance():
         logger.info(f"  LP Qty: {lp_qty}, Hedged Qty: {hedge_qty} (Short: {abs_hedge_qty})")
         logger.info(f"  Difference: {difference} ({percentage_diff:.2f}% of LP)")
 
-        # Determine rebalance action
-        rebalance_action = ""
+        # Determine rebalance action and value
+        rebalance_action = "nothing"
+        rebalance_value = 0.0
+        
         if lp_qty > 0 and abs_difference > 0.1 * lp_qty:
             if difference > 0:
-                rebalance_action = f"INCRESE SHORT {abs_difference:.5f}"
-                logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} for {symbol} ***")
+                rebalance_action = "sell"
+                rebalance_value = abs_difference
+                logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} ***")
             else:
-                rebalance_action = f"DECREASE SHORT {abs_difference:.5f}"
-                logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} for {symbol} ***")
+                rebalance_action = "buy"
+                rebalance_value = abs_difference
+                logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} ***")
         elif lp_qty == 0 and hedge_qty != 0:
-            rebalance_action = f"CLOSE SHORT"
+            rebalance_action = "close"
+            rebalance_value = abs_hedge_qty
             logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} for {symbol} (no LP exposure) ***")
         else:
-            rebalance_action = "NO REBALANCE"
+            rebalance_action = "nothing"
+            rebalance_value = 0.0
             logger.info(f"  No rebalance needed for {symbol}")
 
         # Add to results
@@ -137,21 +151,35 @@ def check_hedge_rebalance():
             "Hedged Qty": hedge_qty,
             "Difference": difference,
             "Percentage Diff": round(percentage_diff, 2),
-            "Rebalance Action": rebalance_action
+            "Rebalance Action": rebalance_action,
+            "Rebalance Value": round(rebalance_value, 5)
         })
 
     # Write results to CSV
     if rebalance_results:
-        output_dir = "./lp-data"  # Match bitget_position_fetcher.py output directory
+        output_dir = data_dir  # Use centralized data directory
         os.makedirs(output_dir, exist_ok=True)
-        csv_filename = f"{output_dir}/rebalancing_results_{timestamp}.csv"
-        headers = ["Timestamp", "Token", "LP Qty", "Hedged Qty", "Difference", "Percentage Diff", "Rebalance Action"]
         
-        with open(csv_filename, mode='w', newline='') as f:
+        # Timestamped file for history
+        history_filename = f"{output_dir}/rebalancing_results_{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')}.csv"
+        # Latest file (without timestamp)
+        latest_filename = f"{output_dir}/rebalancing_results.csv"
+        
+        headers = ["Timestamp", "Token", "LP Qty", "Hedged Qty", "Difference", "Percentage Diff", "Rebalance Action", "Rebalance Value"]
+        
+        # Write to history file
+        with open(history_filename, mode='w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=headers)
             writer.writeheader()
             writer.writerows(rebalance_results)
-        logger.info(f"Rebalancing results written to {csv_filename}")
+        logger.info(f"Rebalancing results written to history: {history_filename}")
+        
+        # Write to latest file (overwrites)
+        with open(latest_filename, mode='w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(rebalance_results)
+        logger.info(f"Latest rebalancing results written to: {latest_filename}")
 
     logger.info("Hedge rebalance check completed.")
 

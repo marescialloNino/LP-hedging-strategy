@@ -1,9 +1,15 @@
 #!/bin/bash
 
+# Base directory
+BASE_DIR="$HOME/LP-hedging-strategy"
 # Set up logging with absolute path
-LOG_DIR="$HOME/LP-hedging-strategy/logs"
+LOG_DIR="$BASE_DIR/logs"
 mkdir -p "$LOG_DIR"  # Create logs directory upfront
 LOG_FILE="$LOG_DIR/workflow_$(date +%Y%m%d_%H%M%S).log"
+
+# Create data directory
+DATA_DIR="$BASE_DIR/lp-data"
+mkdir -p "$DATA_DIR"
 
 # Function to log messages
 log_message() {
@@ -20,27 +26,28 @@ check_status() {
     fi
 }
 
+# Export environment variables for logging configuration
+export LP_HEDGE_LOG_DIR="$LOG_DIR"
+export LP_HEDGE_DATA_DIR="$DATA_DIR"
+
 # Start the workflow
 log_message "Starting LP hedging workflow..."
 
-# Create necessary directories (lp-data still needed)
-mkdir -p "$HOME/LP-hedging-strategy/lp-data"
-
 # Step 1: Run LP monitor
 log_message "Step 1: Running LP monitor..."
-cd "$HOME/LP-hedging-strategy/lp-monitor"
-npm start >> "$LOG_FILE" 2>&1
+cd "$BASE_DIR/lp-monitor"
+NODE_ENV=production npm start >> "$LOG_FILE" 2>&1
 check_status "LP monitor execution"
 
 # Step 2: Run Bitget position fetcher
 log_message "Step 2: Running Bitget position fetcher..."
-cd "$HOME/LP-hedging-strategy/hedge-monitoring"
+cd "$BASE_DIR/hedge-monitoring"
 python3 bitget_position_fetcher.py >> "$LOG_FILE" 2>&1
 check_status "Bitget position fetcher execution"
 
 # Step 3: Run hedge rebalancer
 log_message "Step 3: Running hedge rebalancer..."
-cd "$HOME/LP-hedging-strategy/hedge-rebalancer"
+cd "$BASE_DIR/hedge-rebalancer"
 python3 hedge_rebalancer.py >> "$LOG_FILE" 2>&1
 check_status "Hedge rebalancer execution"
 
