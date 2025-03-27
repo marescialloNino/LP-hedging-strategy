@@ -28,8 +28,9 @@ export interface PositionInfo {
   unclaimedFeeX: string;
   unclaimedFeeY: string;
   liquidityProfile: LiquidityProfileEntry[];
+  tokenXPriceUsd?: number; // Add price in USD for token X
+  tokenYPriceUsd?: number; // Add price in USD for token Y
 }
-
 
 export interface KrystalPositionInfo {
   id: string;

@@ -33,15 +33,19 @@ export async function generateMeteoraCSV(walletAddress: string, positions: Posit
     { id: 'walletAddress', title: 'Wallet Address' },
     { id: 'positionKey', title: 'Position Key' },
     { id: 'poolAddress', title: 'Pool Address' },
+    { id: 'tokenXSymbol', title: 'Token X Symbol' }, // Add token X symbol
     { id: 'tokenXAddress', title: 'Token X Address' },
-    { id: 'tokenYAddress', title: 'Token Y Address' },
     { id: 'amountX', title: 'Token X Qty' },
+    { id: 'tokenYSymbol', title: 'Token Y Symbol' }, // Add token Y symbol
+    { id: 'tokenYAddress', title: 'Token Y Address' },
     { id: 'amountY', title: 'Token Y Qty' },
     { id: 'lowerBinId', title: 'Lower Boundary' },
     { id: 'upperBinId', title: 'Upper Boundary' },
     { id: 'isInRange', title: 'Is In Range' },
     { id: 'unclaimedFeeX', title: 'Unclaimed Fee X' },
     { id: 'unclaimedFeeY', title: 'Unclaimed Fee Y' },
+    { id: 'tokenXPriceUsd', title: 'Token X Price USD' },
+    { id: 'tokenYPriceUsd', title: 'Token Y Price USD' },
   ];
 
   const records = positions
@@ -51,16 +55,21 @@ export async function generateMeteoraCSV(walletAddress: string, positions: Posit
       walletAddress,
       positionKey: pos.id,
       poolAddress: pos.pool,
+      tokenXSymbol: pos.tokenXSymbol || 'Unknown', // Use fetched symbol
       tokenXAddress: pos.tokenX,
-      tokenYAddress: pos.tokenY,
       amountX: pos.amountX,
+      tokenYSymbol: pos.tokenYSymbol || 'Unknown', // Use fetched symbol
+      tokenYAddress: pos.tokenY,
       amountY: pos.amountY,
       lowerBinId: pos.lowerBinId,
       upperBinId: pos.upperBinId,
       isInRange: pos.isInRange,
       unclaimedFeeX: pos.unclaimedFeeX,
       unclaimedFeeY: pos.unclaimedFeeY,
+      tokenXPriceUsd: pos.tokenXPriceUsd || 0,
+      tokenYPriceUsd: pos.tokenYPriceUsd || 0,
     }));
+
 
   // Write to history file (append)
   await writeCSV(METEORA_HISTORY_CSV_PATH, records, headers, true);
@@ -157,15 +166,19 @@ export const METEORA_LATEST_HEADERS = [
   { id: 'walletAddress', title: 'Wallet Address' },
   { id: 'positionKey', title: 'Position Key' },
   { id: 'poolAddress', title: 'Pool Address' },
+  { id: 'tokenXSymbol', title: 'Token X Symbol' }, // Add token X symbol
   { id: 'tokenXAddress', title: 'Token X Address' },
-  { id: 'tokenYAddress', title: 'Token Y Address' },
   { id: 'amountX', title: 'Token X Qty' },
+  { id: 'tokenYSymbol', title: 'Token Y Symbol' }, // Add token Y symbol
+  { id: 'tokenYAddress', title: 'Token Y Address' },
   { id: 'amountY', title: 'Token Y Qty' },
   { id: 'lowerBinId', title: 'Lower Boundary' },
   { id: 'upperBinId', title: 'Upper Boundary' },
   { id: 'isInRange', title: 'Is In Range' },
   { id: 'unclaimedFeeX', title: 'Unclaimed Fee X' },
   { id: 'unclaimedFeeY', title: 'Unclaimed Fee Y' },
+  { id: 'tokenXPriceUsd', title: 'Token X Price USD' },
+  { id: 'tokenYPriceUsd', title: 'Token Y Price USD' },
 ];
 
 export const KRYSTAL_LATEST_HEADERS = [

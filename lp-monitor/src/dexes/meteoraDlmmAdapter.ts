@@ -6,6 +6,15 @@ import { PositionInfo, LiquidityProfileEntry } from '../services/types';
 import BN from 'bn.js';
 import fs from 'fs/promises';
 import util from 'util';
+import axios from 'axios';
+import { createObjectCsvWriter } from 'csv-writer';
+import { getTokenMapping, getTokenPrices } from '../services/tokenMappingService';
+import { loadOpenPositions, loadClosedPositions, saveOpenPosition, closePosition, formatUnixTimestamp } from '../services/positionTrackingService';
+import path from 'path';
+
+// Path relative to project root
+const PROJECT_ROOT = path.resolve(__dirname, '../../..');
+const METEORA_POSITIONS_CSV_PATH = path.join(PROJECT_ROOT, 'lp-data', 'LP_meteora_positions_latest.csv');
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
   let lastError: Error | undefined = undefined;
@@ -32,6 +41,111 @@ async function logToFile(filePath: string, message: string): Promise<void> {
   }
 }
 
+interface Deposit {
+  tx_id: string;
+  position_address: string;
+  pair_address: string;
+  active_bin_id: number;
+  token_x_amount: number;
+  token_y_amount: number;
+  price: number;
+  token_x_usd_amount: number;
+  token_y_usd_amount: number;
+  onchain_timestamp: number;
+}
+
+async function fetchDeposits(positionKey: string): Promise<Deposit[]> {
+  try {
+    const response = await axios.get(`https://dlmm-api.meteora.ag/position/${positionKey}/deposits`);
+    return response.data as Deposit[];
+  } catch (error) {
+    console.error(`Failed to fetch deposits for position ${positionKey}:`, error);
+    return [];
+  }
+}
+
+async function saveMeteoraPositionsToCsv(positions: PositionInfo[]): Promise<void> {
+  const csvWriter = createObjectCsvWriter({
+    path: METEORA_POSITIONS_CSV_PATH,
+    header: [
+      { id: 'timestamp', title: 'Timestamp' },
+      { id: 'owner', title: 'Wallet Address' },
+      { id: 'id', title: 'Position Key' },
+      { id: 'pool', title: 'Pool Address' },
+      { id: 'tokenXSymbol', title: 'Token X Symbol' },
+      { id: 'tokenX', title: 'Token X Address' },
+      { id: 'amountX', title: 'Token X Qty' },
+      { id: 'tokenYSymbol', title: 'Token Y Symbol' },
+      { id: 'tokenY', title: 'Token Y Address' },
+      { id: 'amountY', title: 'Token Y Qty' },
+      { id: 'lowerBinId', title: 'Lower Boundary' },
+      { id: 'upperBinId', title: 'Upper Boundary' },
+      { id: 'isInRange', title: 'Is In Range' },
+      { id: 'unclaimedFeeX', title: 'Unclaimed Fee X' },
+      { id: 'unclaimedFeeY', title: 'Unclaimed Fee Y' },
+      { id: 'tokenXPriceUsd', title: 'Token X Price USD' },
+      { id: 'tokenYPriceUsd', title: 'Token Y Price USD' },
+    ],
+    append: false,
+  });
+
+  const positionsWithTimestamp = positions.map(pos => ({
+    ...pos,
+    timestamp: formatUnixTimestamp(Math.floor(Date.now() / 1000)),
+  }));
+
+  await csvWriter.writeRecords(positionsWithTimestamp);
+}
+
+async function updatePositionTracking(positions: PositionInfo[]): Promise<void> {
+  const openPositions = await loadOpenPositions();
+  const closedPositions = await loadClosedPositions();
+
+  // Check for new positions
+  for (const pos of positions) {
+    if (!openPositions.has(pos.id) && !closedPositions.has(pos.id)) {
+      const deposits = await fetchDeposits(pos.id);
+      if (deposits.length > 0) {
+        const firstDeposit = deposits.sort((a, b) => a.onchain_timestamp - b.onchain_timestamp)[0];
+        const initialValueUsd = firstDeposit.token_x_usd_amount + firstDeposit.token_y_usd_amount;
+
+        await saveOpenPosition({
+          positionKey: pos.id,
+          poolAddress: pos.pool,
+          entryTime: formatUnixTimestamp(firstDeposit.onchain_timestamp),
+          tokenXAmount: (firstDeposit.token_x_amount / Math.pow(10, pos.tokenXDecimals)).toString(),
+          tokenYAmount: (firstDeposit.token_y_amount / Math.pow(10, pos.tokenYDecimals)).toString(),
+          initialValueUsd,
+          tokenXSymbol: pos.tokenXSymbol ?? 'unknown',
+          tokenYSymbol: pos.tokenYSymbol ?? 'unknown',
+          chain: 'Solana',
+          protocol: 'Meteora',
+        });
+        console.log(`Added new position ${pos.id} to open_positions.csv`);
+      }
+    }
+  }
+
+  // Check for closed positions (only if not present in current positions)
+  for (const [positionKey, openPos] of openPositions) {
+    if (!positionKey || isNaN(openPos.initialValueUsd)) {
+      console.warn(`Skipping invalid open position with key: ${positionKey}`);
+      openPositions.delete(positionKey);
+      continue;
+    }
+
+    const currentPos = positions.find(p => p.id === positionKey);
+    if (!currentPos) { // Only close if the position is no longer present
+      const exitTime = formatUnixTimestamp(Math.floor(Date.now() / 1000));
+      const exitValueUsd = 0; // Placeholder until closing value logic is determined
+
+      await closePosition(positionKey, exitTime, exitValueUsd);
+      console.log(`Moved position ${positionKey} to closed_positions.csv with exit value ${exitValueUsd}`);
+    }
+  }
+  // Removed redundant rewrite here
+}
+
 export async function fetchMeteoraPositions(walletAddress: string): Promise<PositionInfo[]> {
   const connection = getSolanaConnection();
   const user = new PublicKey(walletAddress);
@@ -50,16 +164,17 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
       return [];
     }
 
+    const tokenMappings = new Map<string, { symbol: string; coingeckoId: string }>();
     const positionInfos: PositionInfo[] = [];
 
-    for (const [positionKey, pos] of positionsData) { // positionKey is the pool address
+    for (const [positionKey, pos] of positionsData) {
       console.log(`Processing pool ${positionKey}`);
 
       for (const [subIndex, positionDataEntry] of pos.lbPairPositionsData.entries()) {
         try {
           const positionData = positionDataEntry.positionData || {};
-          const positionPubKey = Array.isArray(positionDataEntry.publicKey) 
-            ? positionDataEntry.publicKey[0]?.toString() 
+          const positionPubKey = Array.isArray(positionDataEntry.publicKey)
+            ? positionDataEntry.publicKey[0]?.toString()
             : positionDataEntry.publicKey?.toString() || `${positionKey}-${subIndex}`;
 
           await logToFile(
@@ -70,6 +185,20 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
 
           const lowerBin = positionData.positionBinData?.find((bin: any) => bin.binId === positionData.lowerBinId);
           const upperBin = positionData.positionBinData?.find((bin: any) => bin.binId === positionData.upperBinId);
+
+          const tokenXAddress = pos.tokenX?.publicKey?.toString() || pos.tokenX?.mint?.toString() || 'unknown';
+          const tokenYAddress = pos.tokenY?.publicKey?.toString() || pos.tokenY?.mint?.toString() || 'unknown';
+
+          let tokenXMapping = tokenMappings.get(tokenXAddress);
+          let tokenYMapping = tokenMappings.get(tokenYAddress);
+          if (!tokenXMapping) {
+            tokenXMapping = await getTokenMapping(tokenXAddress);
+            tokenMappings.set(tokenXAddress, tokenXMapping);
+          }
+          if (!tokenYMapping) {
+            tokenYMapping = await getTokenMapping(tokenYAddress);
+            tokenMappings.set(tokenYAddress, tokenYMapping);
+          }
 
           const tokenXDecimals = pos.tokenX?.decimal || 0;
           const tokenYDecimals = pos.tokenY?.decimal || 0;
@@ -89,31 +218,31 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
               binId: bin.binId,
               price: bin.price || '0',
               positionLiquidity: bin.positionLiquidity || '0',
-              positionXAmount: bin.positionXAmount 
-                ? (parseFloat(bin.positionXAmount) / Math.pow(10, tokenXDecimals)).toString() 
+              positionXAmount: bin.positionXAmount
+                ? (parseFloat(bin.positionXAmount) / Math.pow(10, tokenXDecimals)).toString()
                 : '0',
-              positionYAmount: bin.positionYAmount 
-                ? (parseFloat(bin.positionYAmount) / Math.pow(10, tokenYDecimals)).toString() 
+              positionYAmount: bin.positionYAmount
+                ? (parseFloat(bin.positionYAmount) / Math.pow(10, tokenYDecimals)).toString()
                 : '0',
               liquidityShare: share,
             };
           }) || [];
 
           const position: PositionInfo = {
-            id: positionPubKey, // Position key
+            id: positionPubKey,
             owner: walletAddress,
-            pool: positionKey, // Pool address from Map key
-            tokenX: pos.tokenX?.publicKey?.toString() || pos.tokenX?.mint?.toString() || 'unknown', // Token X address
-            tokenY: pos.tokenY?.publicKey?.toString() || pos.tokenY?.mint?.toString() || 'unknown', // Token Y address
-            tokenXSymbol: pos.tokenX?.symbol || 'Unknown',
-            tokenYSymbol: pos.tokenY?.symbol || 'Unknown',
+            pool: positionKey,
+            tokenX: tokenXAddress,
+            tokenY: tokenYAddress,
+            tokenXSymbol: tokenXMapping.symbol,
+            tokenYSymbol: tokenYMapping.symbol,
             tokenXDecimals,
             tokenYDecimals,
-            amountX: positionData.totalXAmount 
-              ? (parseFloat(positionData.totalXAmount) / Math.pow(10, tokenXDecimals)).toString() 
+            amountX: positionData.totalXAmount
+              ? (parseFloat(positionData.totalXAmount) / Math.pow(10, tokenXDecimals)).toString()
               : '0',
-            amountY: positionData.totalYAmount 
-              ? (parseFloat(positionData.totalYAmount) / Math.pow(10, tokenYDecimals)).toString() 
+            amountY: positionData.totalYAmount
+              ? (parseFloat(positionData.totalYAmount) / Math.pow(10, tokenYDecimals)).toString()
               : '0',
             lowerBinId: lowerBin?.price ? parseFloat(lowerBin.price) : 0,
             upperBinId: upperBin?.price ? parseFloat(upperBin.price) : 0,
@@ -123,6 +252,8 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
               : false,
             unclaimedFeeX: scaledFeeX.toString(),
             unclaimedFeeY: scaledFeeY.toString(),
+            tokenXPriceUsd: 0,
+            tokenYPriceUsd: 0,
             liquidityProfile,
           };
 
@@ -135,7 +266,23 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
       }
     }
 
-    await logToFile(logFilePath, 'All processed positions:\n' + util.inspect(positionInfos, { depth: null }));
+    // Fetch current token prices
+    const coingeckoIds = Array.from(tokenMappings.values()).map(m => m.coingeckoId);
+    const priceMap = await getTokenPrices(coingeckoIds);
+    for (const pos of positionInfos) {
+      const tokenXMapping = tokenMappings.get(pos.tokenX)!;
+      const tokenYMapping = tokenMappings.get(pos.tokenY)!;
+      pos.tokenXPriceUsd = priceMap.get(tokenXMapping.coingeckoId) || 0;
+      pos.tokenYPriceUsd = priceMap.get(tokenYMapping.coingeckoId) || 0;
+    }
+
+    // Save to Meteora CSV with old headers
+    await saveMeteoraPositionsToCsv(positionInfos);
+
+    // Update open/closed positions
+    await updatePositionTracking(positionInfos);
+
+    await logToFile(logFilePath, 'All processed positions with prices:\n' + util.inspect(positionInfos, { depth: null }));
     console.log(`Processed ${positionInfos.length} Meteora positions logged to ${logFilePath}`);
     return positionInfos;
   } catch (error) {
