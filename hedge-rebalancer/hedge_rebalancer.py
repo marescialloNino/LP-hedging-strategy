@@ -1,3 +1,4 @@
+
 # hedge_rebalancer.py
 import pandas as pd
 import os
@@ -7,15 +8,12 @@ import csv
 import logging
 import sys
 
-# Get log directory from environment or use default
+# Directory setup and logging configuration remains unchanged
 log_dir = os.getenv('LP_HEDGE_LOG_DIR', './logs')
 data_dir = os.getenv('LP_HEDGE_DATA_DIR', './lp-data')
-
-# Create directories if they don't exist
 os.makedirs(log_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -36,7 +34,7 @@ def calculate_hedge_quantities():
                 symbol = row["symbol"]
                 qty = float(row["quantity"] or 0)  # Negative for short positions
                 if symbol in HEDGABLE_TOKENS:
-                    hedge_quantities[symbol] += qty  # Accumulate negative quantities
+                    hedge_quantities[symbol] += qty
         except Exception as e:
             logger.error(f"Error reading {HEDGE_LATEST_CSV}: {e}")
     else:
@@ -44,10 +42,10 @@ def calculate_hedge_quantities():
     return hedge_quantities
 
 def calculate_lp_quantities():
-    """Calculate total LP quantities by Bitget symbol, searching by token address."""
+    """Calculate total LP quantities by Bitget symbol, matching addresses by chain."""
     lp_quantities = {symbol: 0.0 for symbol in HEDGABLE_TOKENS}
     
-    # Read Meteora LP positions
+    # Read Meteora LP positions (Solana-specific, no chain column yet)
     if os.path.exists(METEORA_LATEST_CSV):
         try:
             meteora_df = pd.read_csv(METEORA_LATEST_CSV)
@@ -56,18 +54,21 @@ def calculate_lp_quantities():
                 token_y = row["Token Y Address"]
                 qty_x = float(row["Token X Qty"] or 0)
                 qty_y = float(row["Token Y Qty"] or 0)
+                chain = "solana"  # Hardcode Solana for Meteora
 
-                for symbol, info in HEDGABLE_TOKENS.items():
-                    if token_x in info["addresses"]:
-                        lp_quantities[symbol] += qty_x
-                    if token_y in info["addresses"]:
-                        lp_quantities[symbol] += qty_y
+                for symbol, chains in HEDGABLE_TOKENS.items():
+                    if chain in chains:
+                        addresses = chains[chain]
+                        if token_x in addresses:
+                            lp_quantities[symbol] += qty_x
+                        if token_y in addresses:
+                            lp_quantities[symbol] += qty_y
         except Exception as e:
             logger.error(f"Error reading {METEORA_LATEST_CSV}: {e}")
     else:
         logger.warning(f"{METEORA_LATEST_CSV} not found.")
 
-    # Read Krystal LP positions
+    # Read Krystal LP positions (uses Chain column)
     if os.path.exists(KRYSTAL_LATEST_CSV):
         try:
             krystal_df = pd.read_csv(KRYSTAL_LATEST_CSV)
@@ -76,12 +77,15 @@ def calculate_lp_quantities():
                 token_y = row["Token Y Address"]
                 qty_x = float(row["Token X Qty"] or 0)
                 qty_y = float(row["Token Y Qty"] or 0)
+                chain = row["Chain"].lower()  
 
-                for symbol, info in HEDGABLE_TOKENS.items():
-                    if token_x in info["addresses"]:
-                        lp_quantities[symbol] += qty_x
-                    if token_y in info["addresses"]:
-                        lp_quantities[symbol] += qty_y
+                for symbol, chains in HEDGABLE_TOKENS.items():
+                    if chain in chains:
+                        addresses = chains[chain]
+                        if token_x in addresses:
+                            lp_quantities[symbol] += qty_x
+                        if token_y in addresses:
+                            lp_quantities[symbol] += qty_y
         except Exception as e:
             logger.error(f"Error reading {KRYSTAL_LATEST_CSV}: {e}")
     else:
@@ -89,40 +93,34 @@ def calculate_lp_quantities():
     
     return lp_quantities
 
+# Rest of the code (check_hedge_rebalance and main) remains unchanged
 def check_hedge_rebalance():
-    """Compare LP quantities with absolute hedge quantities and output results to console and CSV."""
+    """Compare LP quantities with absolute hedge quantities and output results."""
     logger.info("Starting hedge-rebalancer...")
+    
+    hedge_quantities = calculate_hedge_quantities()
+    lp_quantities = calculate_lp_quantities()
 
-    # Calculate quantities
-    hedge_quantities = calculate_hedge_quantities()  # Negative values
-    lp_quantities = calculate_lp_quantities()        # Positive values
-
-    # Prepare rebalancing results
     rebalance_results = []
-    timestamp_for_csv = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')  # For CSV content
-    timestamp_for_filename = datetime.utcnow().strftime('%Y%m%d_%H%M%S')  # For filename
+    timestamp_for_csv = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
+    timestamp_for_filename = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
 
-    # Compare and signal rebalance
     for symbol in HEDGABLE_TOKENS:
-        hedge_qty = hedge_quantities[symbol]  # Negative (short)
-        lp_qty = lp_quantities[symbol]        # Positive (long)
-        abs_hedge_qty = abs(hedge_qty)       # Absolute value of short position
+        hedge_qty = hedge_quantities[symbol]
+        lp_qty = lp_quantities[symbol]
+        abs_hedge_qty = abs(hedge_qty)
 
-        # Calculate directional difference: LP vs absolute hedge qty
-        difference = lp_qty - abs_hedge_qty  # Positive: under-hedged, Negative: over-hedged
+        difference = lp_qty - abs_hedge_qty
         abs_difference = abs(difference)
         percentage_diff = (abs_difference / lp_qty) * 100 if lp_qty > 0 else 0
 
-        # Skip if no LP exposure and no hedge
         if lp_qty == 0 and hedge_qty == 0:
             continue
 
-        # Log output
         logger.info(f"Token: {symbol}")
         logger.info(f"  LP Qty: {lp_qty}, Hedged Qty: {hedge_qty} (Short: {abs_hedge_qty})")
         logger.info(f"  Difference: {difference} ({percentage_diff:.2f}% of LP)")
 
-        # Determine rebalance action and value
         rebalance_action = "nothing"
         rebalance_value = 0.0
         
@@ -139,14 +137,9 @@ def check_hedge_rebalance():
             rebalance_action = "close"
             rebalance_value = abs_hedge_qty
             logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} for {symbol} (no LP exposure) ***")
-        else:
-            rebalance_action = "nothing"
-            rebalance_value = 0.0
-            logger.info(f"  No rebalance needed for {symbol}")
 
-        # Add to results with the colon-formatted timestamp
         rebalance_results.append({
-            "Timestamp": timestamp_for_csv,  # Use colon format in the data
+            "Timestamp": timestamp_for_csv,
             "Token": symbol,
             "LP Qty": lp_qty,
             "Hedged Qty": hedge_qty,
@@ -156,25 +149,22 @@ def check_hedge_rebalance():
             "Rebalance Value": round(rebalance_value, 5)
         })
 
-    # Write results to CSV
     if rebalance_results:
-        output_dir = data_dir  # Use centralized data directory
+        output_dir = data_dir
         os.makedirs(output_dir, exist_ok=True)
         
-        # Use underscore format for filenames
         history_filename = f"{output_dir}/rebalancing_results_{timestamp_for_filename}.csv"
         latest_filename = f"{output_dir}/rebalancing_results.csv"
         
-        headers = ["Timestamp", "Token", "LP Qty", "Hedged Qty", "Difference", "Percentage Diff", "Rebalance Action", "Rebalance Value"]
+        headers = ["Timestamp", "Token", "LP Qty", "Hedged Qty", "Difference", 
+                  "Percentage Diff", "Rebalance Action", "Rebalance Value"]
         
-        # Write to history file
         with open(history_filename, mode='w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=headers)
             writer.writeheader()
             writer.writerows(rebalance_results)
         logger.info(f"Rebalancing results written to history: {history_filename}")
         
-        # Write to latest file (overwrites)
         with open(latest_filename, mode='w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=headers)
             writer.writeheader()
