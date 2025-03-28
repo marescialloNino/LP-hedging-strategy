@@ -3,6 +3,7 @@ import { config } from './config';
 import { retrieveMeteoraPositions } from './services/meteoraPositionService';
 import { retrieveKrystalPositions } from './services/krystalPositionService';
 import { generateMeteoraCSV, generateAndWriteLiquidityProfileCSV, generateKrystalCSV, writeMeteoraLatestCSV, writeKrystalLatestCSV } from './services/csvService';
+import { processPnlForPositions, savePnlResultsCsv } from './services/pnlResultsService';
 import { logger } from './utils/logger'; // Import logger from utils/logger
 import path from 'path';
 import fs from 'fs';
@@ -61,7 +62,7 @@ async function main() {
   let allMeteoraRecords: any[] = [];
   let allKrystalRecords: any[] = [];
 
-  // Process Solana wallets
+  // Process Solana wallets (Meteora positions)
   for (const solWallet of config.SOLANA_WALLET_ADDRESSES) {
     const meteoraRecords = await processSolanaWallet(solWallet);
     allMeteoraRecords = allMeteoraRecords.concat(meteoraRecords);
@@ -75,7 +76,7 @@ async function main() {
     logger.info('No Meteora positions found across all wallets');
   }
 
-  // Process EVM wallets
+  // Process EVM wallets (Krystal positions)
   for (const evmWallet of config.EVM_WALLET_ADDRESSES) {
     const krystalRecords = await processEvmWallet(evmWallet);
     allKrystalRecords = allKrystalRecords.concat(krystalRecords);
@@ -96,6 +97,22 @@ async function main() {
   } else {
     logger.info('No Meteora positions found across all wallets for liquidity profile');
   }
+
+  // --- NEW: Calculate PnL for all Meteora positions and save to CSV ---
+  if (allMeteoraRecords.length > 0) {
+    // Retrieve full positions (including amounts, prices, symbols, etc.) for PnL calculation.
+    const pnlPositions = await retrieveMeteoraPositions(config.SOLANA_WALLET_ADDRESSES.join(','));
+    if (pnlPositions.length > 0) {
+      const pnlResults = await processPnlForPositions(pnlPositions);
+      await savePnlResultsCsv(pnlResults);
+      logger.info(`Calculated and saved PnL results for ${pnlResults.length} Meteora positions.`);
+    } else {
+      logger.info('No Meteora positions available for PnL calculation.');
+    }
+  } else {
+    logger.info('No Meteora records available for PnL calculation.');
+  }
+  // ---------------------------------------------------------------------
 
   logger.info('Batch process completed.');
 }

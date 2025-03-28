@@ -13,7 +13,7 @@ function sleep(ms: number): Promise<void> {
 
 // Simple rate limiter to enforce delay between calls
 let lastCallTimestamp = 0;
-const MIN_DELAY_MS = 500; 
+const MIN_DELAY_MS = 3000;
 
 async function rateLimit(): Promise<void> {
   const now = Date.now();
@@ -28,17 +28,19 @@ interface TokenMapping {
   address: string;
   symbol: string;
   coingeckoId: string;
+  decimals: number;
 }
 
 // Load existing token mappings from CSV
-async function loadTokenMappings(): Promise<Map<string, { symbol: string; coingeckoId: string }>> {
-  const mappings = new Map<string, { symbol: string; coingeckoId: string }>();
+async function loadTokenMappings(): Promise<Map<string, TokenMapping>> {
+  const mappings = new Map<string, TokenMapping>();
   try {
     const data = await fs.readFile(TOKEN_MAPPINGS_CSV_PATH, 'utf8');
     const lines = data.trim().split('\n').slice(1); // Skip header
     for (const line of lines) {
-      const [address, symbol, coingeckoId] = line.split(',').map(val => val.trim());
-      mappings.set(address, { symbol, coingeckoId });
+      // Expecting CSV columns: Token Address,Symbol,CoinGecko ID,Decimals
+      const [address, symbol, coingeckoId, decimalsStr] = line.split(',').map(val => val.trim());
+      mappings.set(address, { address, symbol, coingeckoId, decimals: Number(decimalsStr) });
     }
   } catch (error) {
     // File doesn’t exist yet or is empty; initialize it
@@ -55,6 +57,7 @@ async function initializeTokenMappingsCSV(): Promise<void> {
       { id: 'address', title: 'Token Address' },
       { id: 'symbol', title: 'Symbol' },
       { id: 'coingeckoId', title: 'CoinGecko ID' },
+      { id: 'decimals', title: 'Decimals' },
     ],
     append: false,
   });
@@ -62,7 +65,7 @@ async function initializeTokenMappingsCSV(): Promise<void> {
 }
 
 // Retry wrapper for API calls
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, baseDelayMs = 2000): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 4, baseDelayMs = 2000): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try {
       await rateLimit(); // Enforce rate limit before each attempt
@@ -81,13 +84,17 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, baseDelayMs = 200
 }
 
 // Fetch token info from CoinGecko
-async function fetchTokenInfoFromCoinGecko(address: string, chain: string = 'solana'): Promise<{ symbol: string; coingeckoId: string } | null> {
+async function fetchTokenInfoFromCoinGecko(
+  address: string,
+  chain: string = 'solana'
+): Promise<{ symbol: string; coingeckoId: string; decimals: number } | null> {
   return await withRetry(async () => {
     const url = `https://api.coingecko.com/api/v3/coins/${chain}/contract/${address}`;
     const response = await axios.get(url);
     return {
       symbol: response.data.symbol.toUpperCase(),
       coingeckoId: response.data.id,
+      decimals: Number(response.data.detail_platforms.solana.decimal_place)
     };
   });
 }
@@ -110,13 +117,15 @@ async function fetchTokenPrices(coingeckoIds: string[]): Promise<Map<string, num
 }
 
 // Get or fetch token mapping
-export async function getTokenMapping(address: string): Promise<{ symbol: string; coingeckoId: string }> {
+export async function getTokenMapping(address: string): Promise<TokenMapping> {
   const mappings = await loadTokenMappings();
   let mapping = mappings.get(address);
 
   if (!mapping) {
     const fetchedMapping = await fetchTokenInfoFromCoinGecko(address);
-    mapping = fetchedMapping || { symbol: 'Unknown', coingeckoId: '' };
+    mapping = fetchedMapping
+      ? { address, ...fetchedMapping }
+      : { address, symbol: 'Unknown', coingeckoId: '', decimals: 0 };
     if (fetchedMapping) {
       mappings.set(address, mapping);
       const csvWriter = createObjectCsvWriter({
@@ -125,10 +134,11 @@ export async function getTokenMapping(address: string): Promise<{ symbol: string
           { id: 'address', title: 'Token Address' },
           { id: 'symbol', title: 'Symbol' },
           { id: 'coingeckoId', title: 'CoinGecko ID' },
+          { id: 'decimals', title: 'Decimals' },
         ],
         append: true,
       });
-      await csvWriter.writeRecords([{ address, symbol: mapping.symbol, coingeckoId: mapping.coingeckoId }]);
+      await csvWriter.writeRecords([mapping]);
     }
   }
 
