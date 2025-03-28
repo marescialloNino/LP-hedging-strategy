@@ -152,8 +152,9 @@ def check_hedge_rebalance():
     if rebalance_results:
         output_dir = data_dir
         os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(f"{output_dir}/rebalancing_history" , exist_ok=True)
         
-        history_filename = f"{output_dir}/rebalancing_results_{timestamp_for_filename}.csv"
+        history_filename = f"{output_dir}/rebalancing_history/rebalancing_results_{timestamp_for_filename}.csv"
         latest_filename = f"{output_dir}/rebalancing_results.csv"
         
         headers = ["Timestamp", "Token", "LP Qty", "Hedged Qty", "Difference", 
