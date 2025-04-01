@@ -80,8 +80,16 @@ def main():
     if "Meteora" in dataframes:
         meteora_df = dataframes["Meteora"]
         for _, row in meteora_df.iterrows():
-            # Placeholder pair ticker (update later with symbols if added)
-            pair_ticker = f"{row['Token X Address'][:5]}...-{row['Token Y Address'][:5]}..."
+            # Use token symbols instead of addresses
+            pair_ticker = f"{row['Token X Symbol']}-{row['Token Y Symbol']}"
+            
+            # Calculate Present USD value
+            qty_x = float(row["Token X Qty"])
+            qty_y = float(row["Token Y Qty"])
+            price_x = float(row["Token X Price USD"])
+            price_y = float(row["Token Y Price USD"])
+            present_usd = (qty_x * price_x) + (qty_y * price_y)
+            
             wallet_data.append([
                 "Meteora",
                 truncate_wallet(row["Wallet Address"]),
@@ -96,11 +104,11 @@ def main():
                 "Yes" if row["Is In Range"] else "No",
                 "N/A",  # Fee APR not available
                 "N/A",  # Initial USD not available
-                "N/A",  # Present USD not available
+                f"{present_usd:.2f}",  # Present USD value
                 row["Pool Address"]
             ])
 
-    # Display the table if there’s data
+    # Display the table if there's data
     if wallet_data:
         put_table(wallet_data, header=wallet_headers)
     else:
@@ -110,10 +118,32 @@ def main():
     if "Rebalancing" in dataframes:
         put_markdown("## Token Hedge Summary")
         rebalancing_df = dataframes["Rebalancing"]
+        
+        # Calculate LP Amount USD for each token
+        if "Meteora" in dataframes:
+            meteora_df = dataframes["Meteora"]
+            # Create a mapping of token symbols to their USD values
+            token_usd_values = {}
+            for _, row in meteora_df.iterrows():
+                token_x = row["Token X Symbol"]
+                token_y = row["Token Y Symbol"]
+                qty_x = float(row["Token X Qty"])
+                qty_y = float(row["Token Y Qty"])
+                price_x = float(row["Token X Price USD"])
+                price_y = float(row["Token Y Price USD"])
+                
+                # Add USD values for both tokens
+                if token_x not in token_usd_values:
+                    token_usd_values[token_x] = 0
+                if token_y not in token_usd_values:
+                    token_usd_values[token_y] = 0
+                    
+                token_usd_values[token_x] += qty_x * price_x
+                token_usd_values[token_y] += qty_y * price_y
+
         token_agg = rebalancing_df.groupby("Token").agg({
             "LP Qty": "sum",
             "Hedged Qty": "sum",
-            "Difference": "sum",
             "Rebalance Value": "sum"
         }).reset_index()
 
@@ -136,23 +166,29 @@ def main():
             token = row["Token"]
             lp_qty = row["LP Qty"]
             hedged_qty = row["Hedged Qty"]
-            difference = row["Difference"]
             rebalance_value = row["Rebalance Value"]
             hedge_amount = row["amount"]
+            
+            # Get USD value for the token
+            lp_amount_usd = token_usd_values.get(token, 0)
+            
+            # Add sign to rebalance value
+            rebalance_value_with_sign = f"{'+' if rebalance_value > 0 else ''}{rebalance_value:.4f}"
+            
             token_data.append([
                 token,
                 f"{lp_qty:.4f}",
                 f"{hedged_qty:.4f}",
                 f"{hedge_amount:.4f}",
-                f"{difference:.4f}",
-                f"{rebalance_value:.4f}",
+                f"{lp_amount_usd:.2f}",
+                rebalance_value_with_sign,
                 put_buttons([{'label': 'Hedge', 'value': token, 'color': 'primary'}], 
                            onclick=lambda t, rv=rebalance_value: execute_hedge_trade(t, rv))
             ])
         
         token_headers = [
             "Token", "LP Qty", "Hedged Qty", "Hedged Amount (USDT)", 
-            "Difference", "Suggested Hedge Qty", "Action"
+            "LP Amount USD", "Suggested Hedge Qty", "Action"
         ]
         put_table(token_data, header=token_headers)
     elif "Hedging" in dataframes:

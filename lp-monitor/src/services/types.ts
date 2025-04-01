@@ -6,7 +6,7 @@ export interface LiquidityProfileEntry {
   positionLiquidity: string; //  liquidity contribution to this bin
   positionXAmount: string;   //  X token amount in this bin (adjusted for decimals)
   positionYAmount: string;   //  Y token amount in this bin (adjusted for decimals)
-  liquidityShare: string;    //  percentage share of the bin’s total liquidity
+  liquidityShare: string;    //  percentage share of the bin's total liquidity
 }
 
 export interface PositionInfo {
@@ -59,4 +59,6 @@ export interface KrystalPositionInfo {
   unclaimedFeeY: string;
   feeApr: number;
   totalFeeEarnedUsd: number; // From statsByChain if available
+  tokenXPriceUsd: number; // Token X price in USD
+  tokenYPriceUsd: number; // Token Y price in USD
 }

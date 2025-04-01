@@ -12,7 +12,21 @@ interface KrystalApiPosition {
   liquidity: string;
   minPrice: number;
   maxPrice: number;
-  currentAmounts: { token: { address: string; symbol: string; decimals: number }; balance: string }[];
+  currentAmounts: { 
+    token: { 
+      address: string; 
+      symbol: string; 
+      decimals: number;
+      price: number;
+    }; 
+    balance: string;
+    quotes?: {
+      usd: {
+        marketPrice: number;
+        price: number;
+      }
+    }
+  }[];
   providedAmounts: { token: { address: string; symbol: string; decimals: number }; balance: string }[];
   feePending: { token: { address: string }; balance: string }[];
   initialUnderlyingValue: number;
@@ -55,12 +69,16 @@ export async function fetchKrystalPositions(walletAddress: string, chainIds: str
       .reduce((sum, chainId) => sum + (data.statsByChain[chainId]?.totalFeeEarned || 0), 0);
 
     const krystalPositions: KrystalPositionInfo[] = data.positions.map((pos: KrystalApiPosition) => {
-      const tokenX = pos.currentAmounts[0] || { token: { address: '', symbol: 'Unknown', decimals: 0 }, balance: '0' };
-      const tokenY = pos.currentAmounts[1] || { token: { address: '', symbol: 'Unknown', decimals: 0 }, balance: '0' };
+      const tokenX = pos.currentAmounts[0] || { token: { address: '', symbol: 'Unknown', decimals: 0, price: 0 }, balance: '0' };
+      const tokenY = pos.currentAmounts[1] || { token: { address: '', symbol: 'Unknown', decimals: 0, price: 0 }, balance: '0' };
       const providedX = pos.providedAmounts[0] || { token: { address: '', symbol: 'Unknown', decimals: 0 }, balance: '0' };
       const providedY = pos.providedAmounts[1] || { token: { address: '', symbol: 'Unknown', decimals: 0 }, balance: '0' };
       const feeX = pos.feePending.find((f: { token: { address: string }; balance: string }) => f.token.address === tokenX.token.address) || { balance: '0' };
       const feeY = pos.feePending.find((f: { token: { address: string }; balance: string }) => f.token.address === tokenY.token.address) || { balance: '0' };
+
+      // Get token prices from quotes if available, otherwise use token.price
+      const tokenXPrice = tokenX.quotes?.usd?.price || tokenX.token.price || 0;
+      const tokenYPrice = tokenY.quotes?.usd?.price || tokenY.token.price || 0;
 
       return {
         id: pos.id,
@@ -89,6 +107,8 @@ export async function fetchKrystalPositions(walletAddress: string, chainIds: str
         unclaimedFeeY: feeY.balance,
         feeApr: pos.feeApr,
         totalFeeEarnedUsd,
+        tokenXPriceUsd: tokenXPrice,
+        tokenYPriceUsd: tokenYPrice,
       };
     });
 
