@@ -22,6 +22,7 @@ export interface PnlEvent {
   token_x_usd_amount: number;
   token_y_usd_amount: number;
   onchain_timestamp: number;
+  event_type?: 'Deposit' | 'Withdrawal' | 'Claim Fees';
 }
 
 /**
@@ -31,7 +32,7 @@ export async function fetchWithdrawals(positionId: string): Promise<PnlEvent[]> 
   await apiRateLimit();
   const url = `https://dlmm-api.meteora.ag/position/${positionId}/withdraws`;
   const response = await axios.get(url);
-  return response.data as PnlEvent[];
+  return (response.data as PnlEvent[]).map(event => ({ ...event, event_type: 'Withdrawal' }));
 }
 
 /**
@@ -41,7 +42,7 @@ export async function fetchDeposits(positionId: string): Promise<PnlEvent[]> {
   await apiRateLimit();
   const url = `https://dlmm-api.meteora.ag/position/${positionId}/deposits`;
   const response = await axios.get(url);
-  return response.data as PnlEvent[];
+  return (response.data as PnlEvent[]).map(event => ({ ...event, event_type: 'Deposit' }));
 }
 
 /**
@@ -51,7 +52,7 @@ export async function fetchFeeClaims(positionId: string): Promise<PnlEvent[]> {
   await apiRateLimit();
   const url = `https://dlmm-api.meteora.ag/position/${positionId}/claim_fees`;
   const response = await axios.get(url);
-  return response.data as PnlEvent[];
+  return (response.data as PnlEvent[]).map(event => ({ ...event, event_type: 'Claim Fees' }));
 }
 
 /**
@@ -62,49 +63,108 @@ function eventUsdValue(evt: PnlEvent): number {
 }
 
 /**
- * -----------------------------------------------------------------------------
- * Standard USD-Based PnL Calculation
- * -----------------------------------------------------------------------------
- *
- * For a given Meteora position, this function computes:
- *  - Realized PnL (from withdrawals)
- *  - Unrealized PnL (open position value minus remaining capital)
- *  - Net PnL (current position value plus withdrawals, minus capital deposits)
- *
- * It reconstructs the cost basis by subtracting fee rewards (which have a zero cost)
- * from total deposits.
- *
- * @param positionId - The position’s address.
- * @param currentPositionValueUsd - The current USD value of the open position.
- * @returns An object with realized, unrealized, and net PnL in USD.
+ * Interface for token metadata (assuming this comes from tokenMappingService).
+ */
+interface TokenMetadata {
+  address: string;
+  decimals: number;
+}
+
+/**
+ * Calculate PnL in USD with reinvested fees tracked in token quantities.
  */
 export async function calculateMeteoraPositionPNLUsd(
   positionId: string,
-  currentPositionValueUsd: number
+  currentPositionValueUsd: number,
+  tokenXAddress: string,
+  tokenYAddress: string
 ): Promise<{
   realizedPNLUsd: number;
   unrealizedPNLUsd: number;
   netPNLUsd: number;
+  capitalDepositsUsd: number;
+  reinvestedFeesUsd: number;
+  totalFeeRewardUsd: number;
 }> {
-  // Fetch events.
+  // Fetch token decimals
+  const tokenXMapping = await getTokenMapping(tokenXAddress);
+  const tokenYMapping = await getTokenMapping(tokenYAddress);
+  const tokenXDecimals = tokenXMapping.decimals;
+  const tokenYDecimals = tokenYMapping.decimals;
+
+  // Fetch events
   const deposits = await fetchDeposits(positionId);
   const withdrawals = await fetchWithdrawals(positionId);
   const feeClaims = await fetchFeeClaims(positionId);
 
-  const totalDepositUsd = deposits.reduce((sum, evt) => sum + eventUsdValue(evt), 0);
-  const totalFeeRewardUsd = feeClaims.reduce((sum, evt) => sum + eventUsdValue(evt), 0);
-  const totalWithdrawalUsd = withdrawals.reduce((sum, evt) => sum + eventUsdValue(evt), 0);
+  // Combine and sort events by timestamp
+  const allEvents: PnlEvent[] = [...deposits, ...withdrawals, ...feeClaims].sort(
+    (a, b) => a.onchain_timestamp - b.onchain_timestamp
+  );
 
-  // Capital deposits exclude fee rewards.
-  const capitalDepositsUsd = totalDepositUsd - totalFeeRewardUsd;
+  // Track cumulative and available claimed tokens
+  let cumulativeClaimedX = 0;
+  let cumulativeClaimedY = 0;
+  let availableClaimedX = 0;
+  let availableClaimedY = 0;
+  let capitalDepositsUsd = 0;
+  let totalDepositUsd = 0;
+  let totalFeeRewardUsd = 0;
+  let totalWithdrawalUsd = 0;
+
+  for (const evt of allEvents) {
+    if (evt.event_type === 'Claim Fees') {
+      cumulativeClaimedX += evt.token_x_amount;
+      cumulativeClaimedY += evt.token_y_amount;
+      availableClaimedX = cumulativeClaimedX;
+      availableClaimedY = cumulativeClaimedY;
+      totalFeeRewardUsd += eventUsdValue(evt);
+    } else if (evt.event_type === 'Deposit') {
+      const depositXAdjusted = evt.token_x_amount / Math.pow(10, tokenXDecimals);
+      const depositYAdjusted = evt.token_y_amount / Math.pow(10, tokenYDecimals);
+      const availableXAdjusted = availableClaimedX / Math.pow(10, tokenXDecimals);
+      const availableYAdjusted = availableClaimedY / Math.pow(10, tokenYDecimals);
+
+      // Calculate reinvested ratios
+      const reinvestedRatioX = depositXAdjusted > 0 ? Math.min(availableXAdjusted / depositXAdjusted, 1) : 0;
+      const reinvestedRatioY = depositYAdjusted > 0 ? Math.min(availableYAdjusted / depositYAdjusted, 1) : 0;
+
+      // Split USD values
+      const reinvestedXUsd = evt.token_x_usd_amount * reinvestedRatioX;
+      const capitalXUsd = evt.token_x_usd_amount * (1 - reinvestedRatioX);
+      const reinvestedYUsd = evt.token_y_usd_amount * reinvestedRatioY;
+      const capitalYUsd = evt.token_y_usd_amount * (1 - reinvestedRatioY);
+
+      // Total cost basis for this deposit
+      const costBasis = capitalXUsd + capitalYUsd;
+      capitalDepositsUsd += costBasis;
+      totalDepositUsd += eventUsdValue(evt);
+
+      // Update available claimed tokens
+      const reinvestedX = evt.token_x_amount * reinvestedRatioX;
+      const reinvestedY = evt.token_y_amount * reinvestedRatioY;
+      availableClaimedX = Math.max(0, availableClaimedX - reinvestedX);
+      availableClaimedY = Math.max(0, availableClaimedY - reinvestedY);
+    } else if (evt.event_type === 'Withdrawal') {
+      totalWithdrawalUsd += eventUsdValue(evt);
+    }
+    // Add event_type for consistency
+    evt['event_type'] = evt['event_type'] || (deposits.includes(evt) ? 'Deposit' : withdrawals.includes(evt) ? 'Withdrawal' : 'Claim Fees');
+  }
+
   if (totalDepositUsd === 0) {
     throw new Error(`No deposits found for position ${positionId}`);
   }
 
-  // Assume withdrawals remove deposits proportionally.
-  const withdrawalRatio = totalWithdrawalUsd / totalDepositUsd;
-  const withdrawnCapitalUsd = capitalDepositsUsd * withdrawalRatio;
+  // Reinvested fees
+  const reinvestedFeesUsd = totalDepositUsd - capitalDepositsUsd;
 
+  // Total inflows
+  const totalInflowsUsd = capitalDepositsUsd + totalFeeRewardUsd + reinvestedFeesUsd;
+
+  // PnL calculations
+  const withdrawalRatio = totalInflowsUsd > 0 ? Math.min(totalWithdrawalUsd / totalInflowsUsd, 1) : 0;
+  const withdrawnCapitalUsd = capitalDepositsUsd * withdrawalRatio;
   const realizedPNLUsd = totalWithdrawalUsd - withdrawnCapitalUsd;
   const remainingCapitalUsd = capitalDepositsUsd - withdrawnCapitalUsd;
   const unrealizedPNLUsd = currentPositionValueUsd - remainingCapitalUsd;
@@ -114,106 +174,117 @@ export async function calculateMeteoraPositionPNLUsd(
     realizedPNLUsd,
     unrealizedPNLUsd,
     netPNLUsd,
+    capitalDepositsUsd,
+    reinvestedFeesUsd,
+    totalFeeRewardUsd,
   };
 }
 
 /**
- * -----------------------------------------------------------------------------
- * Token B-Based (Quote Token) PnL Calculation
- * -----------------------------------------------------------------------------
- *
- * In this function we rebase all cash-flow events (deposits, withdrawals, fee claims)
- * directly into token B units. For each event we compute a token B price from the event’s
- * token_y data as follows:
- *
- *    tokenBPrice_at_event = (token_y_usd_amount) ÷ ( (token_y_amount ÷ 10^(decimals)) )
- *
- * Then, the event’s token B equivalent is:
- *
- *    eventTokenBValue = eventUsdValue(evt) ÷ tokenBPrice_at_event
- *
- * The function then reconstructs:
- *  - Total deposits in token B,
- *  - Fee rewards in token B,
- *  - Capital deposits in token B (total deposits minus fee rewards),
- *  - Total withdrawals in token B.
- *
- * The same proportional withdrawal method is applied to separate realized from unrealized PnL.
- *
- * Additionally, the current position’s USD value is converted into token B units using the
- * current token B price (currentTokenBPriceUsd).
- *
- * This function now fetches the token decimals from token mapping (via getTokenMapping)
- * using the provided tokenBAddress.
- *
- * @param positionId - The position’s address.
- * @param currentPositionValueUsd - The current USD value of the position.
- * @param currentTokenBPriceUsd - The current USD price for token B.
- * @param tokenBAddress - The token B address (used to fetch decimals from token mapping).
- * @returns An object with realized, unrealized, and net PnL in token B.
+ * Calculate PnL in Token Y (Token B) with reinvested fees tracked.
  */
 export async function calculateMeteoraPositionPNLTokenB(
   positionId: string,
   currentPositionValueUsd: number,
   currentTokenBPriceUsd: number,
-  tokenBAddress: string
+  tokenXAddress: string,
+  tokenYAddress: string
 ): Promise<{
   realizedPNLTokenB: number;
   unrealizedPNLTokenB: number;
   netPNLTokenB: number;
+  capitalDepositsTokenB: number;
+  reinvestedFeesTokenB: number;
 }> {
-  // Fetch the token mapping for token B to get decimals.
-  const tokenMapping = await getTokenMapping(tokenBAddress);
-  const decimals = tokenMapping.decimals;
+  // Fetch token decimals
+  const tokenXMapping = await getTokenMapping(tokenXAddress);
+  const tokenYMapping = await getTokenMapping(tokenYAddress);
+  const tokenXDecimals = tokenXMapping.decimals;
+  const tokenYDecimals = tokenYMapping.decimals;
 
-  // Fetch events.
+  // Fetch events
   const deposits = await fetchDeposits(positionId);
   const withdrawals = await fetchWithdrawals(positionId);
   const feeClaims = await fetchFeeClaims(positionId);
 
-  // For each event, convert its USD value into token B units.
-  // We assume token B is the Y token and use its raw amount and usd amount.
+  // Combine and sort events
+  const allEvents: PnlEvent[] = [...deposits, ...withdrawals, ...feeClaims].sort(
+    (a, b) => a.onchain_timestamp - b.onchain_timestamp
+  );
+
+  // Convert event to Token B units
   async function convertEventToTokenB(evt: PnlEvent): Promise<number> {
     const tokenYAmount = evt.token_y_amount;
     if (tokenYAmount === 0) {
       return eventUsdValue(evt) / currentTokenBPriceUsd;
     }
-    // Convert raw token_y_amount to actual quantity using decimals.
-    const actualTokenYQuantity = tokenYAmount / Math.pow(10, decimals);
-    // Compute the token B price at the event.
+    const actualTokenYQuantity = tokenYAmount / Math.pow(10, tokenYDecimals);
     const tokenBPriceAtEvent = evt.token_y_usd_amount / actualTokenYQuantity;
-    // Convert the total USD value of the event into token B units.
     return eventUsdValue(evt) / tokenBPriceAtEvent;
   }
 
+  let cumulativeClaimedX = 0;
+  let cumulativeClaimedY = 0;
+  let availableClaimedX = 0;
+  let availableClaimedY = 0;
+  let capitalDepositsTokenB = 0;
   let totalDepositTokenB = 0;
-  for (const dep of deposits) {
-    totalDepositTokenB += await convertEventToTokenB(dep);
-  }
-
   let totalFeeRewardTokenB = 0;
-  for (const fc of feeClaims) {
-    totalFeeRewardTokenB += await convertEventToTokenB(fc);
-  }
-
   let totalWithdrawalTokenB = 0;
-  for (const wd of withdrawals) {
-    totalWithdrawalTokenB += await convertEventToTokenB(wd);
+
+  for (const evt of allEvents) {
+    const eventValueTokenB = await convertEventToTokenB(evt);
+    if (evt.event_type === 'Claim Fees') {
+      cumulativeClaimedX += evt.token_x_amount;
+      cumulativeClaimedY += evt.token_y_amount;
+      availableClaimedX = cumulativeClaimedX;
+      availableClaimedY = cumulativeClaimedY;
+      totalFeeRewardTokenB += eventValueTokenB;
+    } else if (evt.event_type === 'Deposit') {
+      const depositXAdjusted = evt.token_x_amount / Math.pow(10, tokenXDecimals);
+      const depositYAdjusted = evt.token_y_amount / Math.pow(10, tokenYDecimals);
+      const availableXAdjusted = availableClaimedX / Math.pow(10, tokenXDecimals);
+      const availableYAdjusted = availableClaimedY / Math.pow(10, tokenYDecimals);
+
+      // Calculate reinvested ratios
+      const reinvestedRatioX = depositXAdjusted > 0 ? Math.min(availableXAdjusted / depositXAdjusted, 1) : 0;
+      const reinvestedRatioY = depositYAdjusted > 0 ? Math.min(availableYAdjusted / depositYAdjusted, 1) : 0;
+
+      // Split USD values and convert to Token B
+      const reinvestedXUsd = evt.token_x_usd_amount * reinvestedRatioX;
+      const capitalXUsd = evt.token_x_usd_amount * (1 - reinvestedRatioX);
+      const reinvestedYUsd = evt.token_y_usd_amount * reinvestedRatioY;
+      const capitalYUsd = evt.token_y_usd_amount * (1 - reinvestedRatioY);
+      const costBasisTokenB = (capitalXUsd + capitalYUsd) / currentTokenBPriceUsd;
+
+      capitalDepositsTokenB += costBasisTokenB;
+      totalDepositTokenB += eventValueTokenB;
+
+      // Update available claimed tokens
+      const reinvestedX = evt.token_x_amount * reinvestedRatioX;
+      const reinvestedY = evt.token_y_amount * reinvestedRatioY;
+      availableClaimedX = Math.max(0, availableClaimedX - reinvestedX);
+      availableClaimedY = Math.max(0, availableClaimedY - reinvestedY);
+    } else if (evt.event_type === 'Withdrawal') {
+      totalWithdrawalTokenB += eventValueTokenB;
+    }
+    evt['event_type'] = evt['event_type'] || (deposits.includes(evt) ? 'Deposit' : withdrawals.includes(evt) ? 'Withdrawal' : 'Claim Fees');
   }
 
-  // Capital deposits in token B exclude fee rewards.
-  const capitalDepositsTokenB = totalDepositTokenB - totalFeeRewardTokenB;
   if (totalDepositTokenB === 0) {
     throw new Error(`No deposits found for position ${positionId}`);
   }
 
-  // Assume withdrawals remove deposits proportionally.
-  const withdrawalRatio = totalWithdrawalTokenB / totalDepositTokenB;
+  // Reinvested fees
+  const reinvestedFeesTokenB = totalDepositTokenB - capitalDepositsTokenB;
+
+  // Total inflows
+  const totalInflowsTokenB = capitalDepositsTokenB + totalFeeRewardTokenB + reinvestedFeesTokenB;
+
+  // PnL calculations
+  const withdrawalRatio = totalInflowsTokenB > 0 ? Math.min(totalWithdrawalTokenB / totalInflowsTokenB, 1) : 0;
   const withdrawnCapitalTokenB = capitalDepositsTokenB * withdrawalRatio;
-
   const realizedPNLTokenB = totalWithdrawalTokenB - withdrawnCapitalTokenB;
-
-  // Convert the current position's USD value into token B units using the current token B price.
   const currentPositionValueTokenB = currentPositionValueUsd / currentTokenBPriceUsd;
   const remainingCapitalTokenB = capitalDepositsTokenB - withdrawnCapitalTokenB;
   const unrealizedPNLTokenB = currentPositionValueTokenB - remainingCapitalTokenB;
@@ -223,5 +294,7 @@ export async function calculateMeteoraPositionPNLTokenB(
     realizedPNLTokenB,
     unrealizedPNLTokenB,
     netPNLTokenB,
+    capitalDepositsTokenB,
+    reinvestedFeesTokenB,
   };
 }

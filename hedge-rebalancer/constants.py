@@ -33,6 +33,9 @@ HEDGABLE_TOKENS = {
     "SONICUSDT": {
         "sonic" : ["0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"]
     },
+    "KILOUSDT": {
+        "bsc" : ["0x503fa24b7972677f00c4618e5fbe237780c1df53"]
+    },
 
     
     # Solana

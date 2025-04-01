@@ -37,8 +37,6 @@ export async function processPnlForPositions(positions: any[]): Promise<PnlResul
 
   for (const pos of positions) {
     // Compute the current USD value of the position.
-    // pos.amountX and pos.amountY are strings representing the actual token quantities.
-    // pos.tokenXPriceUsd and pos.tokenYPriceUsd are the current USD prices.
     const amountX = parseFloat(pos.amountX);
     const amountY = parseFloat(pos.amountY);
     const tokenXPriceUsd = pos.tokenXPriceUsd || 0;
@@ -47,10 +45,21 @@ export async function processPnlForPositions(positions: any[]): Promise<PnlResul
 
     try {
       // Calculate USD-based PnL
-      const pnlUsd = await calculateMeteoraPositionPNLUsd(pos.id, currentPositionValueUsd);
-      // Calculate tokenB-based PnL.
-      // We assume tokenB is the Y token; use pos.tokenY as the tokenB address and tokenYPriceUsd as the current tokenB price.
-      const pnlTokenB = await calculateMeteoraPositionPNLTokenB(pos.id, currentPositionValueUsd, tokenYPriceUsd, pos.tokenY);
+      const pnlUsd = await calculateMeteoraPositionPNLUsd(
+        pos.id,
+        currentPositionValueUsd,
+        pos.tokenX,
+        pos.tokenY
+      );
+
+      // Calculate tokenB-based PnL
+      const pnlTokenB = await calculateMeteoraPositionPNLTokenB(
+        pos.id,
+        currentPositionValueUsd,
+        tokenYPriceUsd,
+        pos.tokenX,
+        pos.tokenY
+      );
 
       results.push({
         timestamp: now,

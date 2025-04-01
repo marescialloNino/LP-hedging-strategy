@@ -1,0 +1,155 @@
+============================DEPOSITS=====================================
+[
+    {
+      "tx_id": "2qvfnbhGaKcBeUhM9pmr1hgzPTmyb6Y5PSas1m4zcY9WgBtXEmuoTFbsUQtcFgxuG6AWxzoREG2nNjq8SCsRJCSj",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "active_bin_id": 14,
+      "token_x_amount": 129849938,
+      "token_y_amount": 317673027,
+      "price": 1.3194787630628722,
+      "token_x_usd_amount": 1.5587186557520003,
+      "token_y_usd_amount": 2.890040463596531,
+      "onchain_timestamp": 1743273706
+    },
+    {
+      "tx_id": "gTidAMG8PqH8abUxDdM2KNsaDWCBYf4HnbRzCy64gWRsCPXGzZV3YrNyPSdi9GV9pkS18FbPGUcptJSVbKRTy9E",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "active_bin_id": 15,
+      "token_x_amount": 177878373,
+      "token_y_amount": 300997806,
+      "price": 1.3458683383241292,
+      "token_x_usd_amount": 3.1490790478381956,
+      "token_y_usd_amount": 3.959325140124,
+      "onchain_timestamp": 1742925489
+    },
+    {
+      "tx_id": "2F2i87xbq6sr85Jx5noPj2BaCEWy162L4MyK88Tz7FacfXjhPJqkwSkDkHZPg3eUan4C7LSDgH2LNg1eRuvdyfj7",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "active_bin_id": 8,
+      "token_x_amount": 182633006,
+      "token_y_amount": 247035555,
+      "price": 1.1716593810022655,
+      "token_x_usd_amount": 3.0952738554112553,
+      "token_y_usd_amount": 3.573369303075,
+      "onchain_timestamp": 1742854808
+    },
+    {
+      "tx_id": "3aLHrGfNhQndsqnkmH8dQ32TnTPcb68nZ9pBQLzcjcMwMZfFLsEV7ayjKtm78bMsEjttEYhxHGybMgEHe9LRNFqD",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "active_bin_id": 7,
+      "token_x_amount": 137450252,
+      "token_y_amount": 167964062,
+      "price": 1.1486856676492798,
+      "token_x_usd_amount": 2.168140275048,
+      "token_y_usd_amount": 2.306518822864727,
+      "onchain_timestamp": 1742821195
+    },
+    {
+      "tx_id": "4mw9S2yPy53wCXs4wxvziH5CBTm6sm9CudBHHrYqDU2k7ZDrzKCWzGHxMWk4YkKP99qWt8rfLYiivjFzZDJ5Hhqe",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "active_bin_id": 5,
+      "token_x_amount": 463068160,
+      "token_y_amount": 208834692,
+      "price": 1.1040808032,
+      "token_x_usd_amount": 7.3340916341881,
+      "token_y_usd_amount": 2.9957336567399997,
+      "onchain_timestamp": 1742798322
+    },
+    {
+      "tx_id": "2tUzrJBEKPfmnNWSqK3W4mAdn1tQKkP2wNG5x2jgvFeX66NNA6eEukbKuoDUWRPCLAHupf1FAGfg853Xm5ofa4rs",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "active_bin_id": 8,
+      "token_x_amount": 16048290510,
+      "token_y_amount": 19656991980,
+      "price": 1.1716593810022655,
+      "token_x_usd_amount": 190.58852694792373,
+      "token_y_usd_amount": 199.24327070927998,
+      "onchain_timestamp": 1742768116
+    }
+  ]
+
+
+============================DEPOSITS FINISH=====================================
+
+
+============================CLAIM FEES=====================================
+[
+    {
+      "tx_id": "4tsYMmxV7bJgp8ugzeMbjmiNLosxS1s31kJxPDBMxH6rkf9cCnC9DXCCrJfXUr8EEUnNGmZCV8aNrJrgsgtzGza4",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "token_x_amount": 268955863,
+      "token_y_amount": 311013352,
+      "token_x_usd_amount": 3.2285461794520005,
+      "token_y_usd_amount": 2.829453858538613,
+      "onchain_timestamp": 1743273679
+    },
+    {
+      "tx_id": "box4bq9hBNTgWXbRHwPae1i9V4e7njxoSWKNgnQkqzQKq96h58x2ZNwBJ1euPx1KmXgksk7Y5WgtUAX1MFC25Sv",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "token_x_amount": 184843119,
+      "token_y_amount": 163328876,
+      "token_x_usd_amount": 2.53974445506,
+      "token_y_usd_amount": 1.6674281520244352,
+      "onchain_timestamp": 1743146535
+    },
+    {
+      "tx_id": "4pLRk6tUcwwaX7rkpK5vLaMw5KsSwcTmphLwSkhrJyevgPy8SuCGSYEGTw8kgzuzr5dhGSsfkxx6o4yzNCR9Fk5k",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "token_x_amount": 220756470,
+      "token_y_amount": 385766496,
+      "token_x_usd_amount": 3.416604283285389,
+      "token_y_usd_amount": 3.8619083914560006,
+      "onchain_timestamp": 1743066345
+    },
+    {
+      "tx_id": "ADz5eNqMY8L3sPHSvM6MiPJA3x89hsdBiwXXsUmWxdBwMntUZQfGmcvSLjNKiKdPZCGPzDa6rdScP2ouykGRti8",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "token_x_amount": 177878366,
+      "token_y_amount": 300997810,
+      "token_x_usd_amount": 3.1490789239133306,
+      "token_y_usd_amount": 3.9593251927399997,
+      "onchain_timestamp": 1742925457
+    },
+    {
+      "tx_id": "9JbT9a3uAV4kpwhsmyec5m92DvJv3UNx4TUdpN3axMaSeyFTKyVA6ZoQeUCWorPpFWqt9VDCyvsWyNr71H4xkdF",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "token_x_amount": 182633004,
+      "token_y_amount": 247035557,
+      "token_x_usd_amount": 3.0952738215151494,
+      "token_y_usd_amount": 3.5733693320050004,
+      "onchain_timestamp": 1742854776
+    },
+    {
+      "tx_id": "2V8SGtbUtpqj2ghPPf73gknQp6sueZFhHT9YKawvob6bmpGzYqZAtixCg3WvDtao5YV1rbVhoQi9gg99rMwFQjLL",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "token_x_amount": 137450238,
+      "token_y_amount": 167964056,
+      "token_x_usd_amount": 2.1410731586137417,
+      "token_y_usd_amount": 2.323278822592,
+      "onchain_timestamp": 1742821180
+    },
+    {
+      "tx_id": "R2JLpUxNpdNTKM2FkAQBGB2fbnwjYHkC4sUFdKr71PZKWhC58CezwBc26h9YoFah4VXznWqHkCx4ywUdbXEDbZB",
+      "position_address": "JC1ZqiNnanxy6aKKFua7ySkhCMMfrX3FyrWxryRqqUqc",
+      "pair_address": "6te8HR3NRuun1hL8ddeNFhR8FZyyQfWr1MNCCqxFYgds",
+      "token_x_amount": 233116810,
+      "token_y_amount": 208834693,
+      "token_x_usd_amount": 3.6921131567534613,
+      "token_y_usd_amount": 2.995733671085,
+      "onchain_timestamp": 1742798303
+    }
+  ]
+
+  ============================CLAIM FEES FINISH=====================================
