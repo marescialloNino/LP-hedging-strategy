@@ -15,15 +15,49 @@ REBALANCING_CSV = os.path.join(DATA_DIR, "rebalancing_results.csv")
 KRYSTAL_CSV = os.path.join(DATA_DIR, "LP_krystal_positions_latest.csv")
 METEORA_CSV = os.path.join(DATA_DIR, "LP_meteora_positions_latest.csv")
 HEDGING_CSV = os.path.join(DATA_DIR, "hedging_positions_latest.csv")
+METEORA_PNL_CSV = os.path.join(DATA_DIR, "position_pnl_results.csv")  # New PnL CSV
 
-# Placeholder function for hedge trade execution
+# Placeholder function for hedge trade execution with Bitget message
 def execute_hedge_trade(token, rebalance_value):
-    put_text(f"Executing hedge trade for {token}: {rebalance_value} USDT")
-    toast(f"Hedge trade triggered for {token}", duration=3, color="success")
+    order_size = abs(rebalance_value)
+    order_type = "Buy" if rebalance_value > 0 else "Sell"
+    order_message = f"Placing {order_type} order on Bitget: {order_size:.4f} {token} @ market price"
+    put_text(order_message)
+    toast(f"Hedge trade triggered for {token}: {order_message}", duration=5, color="success")
 
 # Function to truncate wallet address
 def truncate_wallet(wallet):
     return f"{wallet[:5]}..." if isinstance(wallet, str) and len(wallet) > 5 else wallet
+
+# Function to calculate total USD value for a token from Krystal and Meteora CSVs
+def calculate_token_usd_value(token, krystal_df=None, meteora_df=None):
+    total_usd = 0.0
+
+    # Process Krystal positions
+    if krystal_df is not None and not krystal_df.empty:
+        # Check Token X
+        token_x_matches = krystal_df[krystal_df["Token X Symbol"] == token]
+        for _, row in token_x_matches.iterrows():
+            total_usd += float(row["Token X USD Amount"]) if pd.notna(row["Token X USD Amount"]) else 0
+
+        # Check Token Y
+        token_y_matches = krystal_df[krystal_df["Token Y Symbol"] == token]
+        for _, row in token_y_matches.iterrows():
+            total_usd += float(row["Token Y USD Amount"]) if pd.notna(row["Token Y USD Amount"]) else 0
+
+    # Process Meteora positions
+    if meteora_df is not None and not meteora_df.empty:
+        # Check Token X
+        token_x_matches = meteora_df[meteora_df["Token X Symbol"] == token]
+        for _, row in token_x_matches.iterrows():
+            total_usd += float(row["Token X USD Amount"]) if pd.notna(row["Token X USD Amount"]) else 0
+
+        # Check Token Y
+        token_y_matches = meteora_df[meteora_df["Token Y Symbol"] == token]
+        for _, row in token_y_matches.iterrows():
+            total_usd += float(row["Token Y USD Amount"]) if pd.notna(row["Token Y USD Amount"]) else 0
+
+    return total_usd
 
 # Main web application function
 def main():
@@ -32,7 +66,8 @@ def main():
         "Rebalancing": REBALANCING_CSV,
         "Krystal": KRYSTAL_CSV,
         "Meteora": METEORA_CSV,
-        "Hedging": HEDGING_CSV
+        "Hedging": HEDGING_CSV,
+        "Meteora PnL": METEORA_PNL_CSV
     }
     dataframes = {}
     for name, path in csv_files.items():
@@ -44,14 +79,12 @@ def main():
     # Table 1: Wallet Positions (Krystal and Meteora)
     put_markdown("## Wallet Positions")
 
-    # Define headers for the table
     wallet_headers = [
-        "Source", "Wallet", "Chain", "Protocol", "Pair", "Token X Qty", "Token X Qty","Current Price", "Min Price", "Max Price",
+        "Source", "Wallet", "Chain", "Protocol", "Pair", "Token X Qty", "Token Y Qty", "Current Price", "Min Price", "Max Price",
         "In Range", "Fee APR", "Initial USD", "Present USD", "Pool Address"
     ]
     wallet_data = []
 
-    # Process Krystal positions
     if "Krystal" in dataframes:
         krystal_df = dataframes["Krystal"]
         ticker_source = "symbol" if "Token X Symbol" in krystal_df.columns and "Token Y Symbol" in krystal_df.columns else "address"
@@ -76,18 +109,14 @@ def main():
                 row["Pool Address"]
             ])
 
-    # Process Meteora positions
     if "Meteora" in dataframes:
         meteora_df = dataframes["Meteora"]
         for _, row in meteora_df.iterrows():
-            # Use token symbols instead of addresses
             pair_ticker = f"{row['Token X Symbol']}-{row['Token Y Symbol']}"
-            
-            # Calculate Present USD value
-            qty_x = float(row["Token X Qty"])
-            qty_y = float(row["Token Y Qty"])
-            price_x = float(row["Token X Price USD"])
-            price_y = float(row["Token Y Price USD"])
+            qty_x = float(row["Token X Qty"]) if pd.notna(row["Token X Qty"]) else 0
+            qty_y = float(row["Token Y Qty"]) if pd.notna(row["Token Y Qty"]) else 0
+            price_x = float(row["Token X Price USD"]) if pd.notna(row["Token X Price USD"]) else 0
+            price_y = float(row["Token Y Price USD"]) if pd.notna(row["Token Y Price USD"]) else 0
             present_usd = (qty_x * price_x) + (qty_y * price_y)
             
             wallet_data.append([
@@ -98,49 +127,59 @@ def main():
                 pair_ticker,
                 row["Token X Qty"],
                 row["Token Y Qty"],
-                "N/A",  # Current price not available
+                "N/A",
                 f"{row['Lower Boundary']:.6f}" if pd.notna(row["Lower Boundary"]) else "N/A",
                 f"{row['Upper Boundary']:.6f}" if pd.notna(row["Upper Boundary"]) else "N/A",
                 "Yes" if row["Is In Range"] else "No",
-                "N/A",  # Fee APR not available
-                "N/A",  # Initial USD not available
-                f"{present_usd:.2f}",  # Present USD value
+                "N/A",
+                "N/A",
+                f"{present_usd:.2f}",
                 row["Pool Address"]
             ])
 
-    # Display the table if there's data
     if wallet_data:
         put_table(wallet_data, header=wallet_headers)
     else:
         put_text("No wallet positions found in Krystal or Meteora CSVs.")
 
-    # Table 2: Token Hedge Summary (Rebalancing + Hedging)
+    # Table 2: Meteora Positions PnL
+    if "Meteora PnL" in dataframes:
+        put_markdown("## Meteora Positions PnL")
+        
+        pnl_headers = [
+            "Timestamp", "Position ID", "Owner", "Pool Address", "Pair",
+            "Realized PNL (USD)", "Unrealized PNL (USD)", "Net PNL (USD)",
+            "Realized PNL (Token B)", "Unrealized PNL (Token B)", "Net PNL (Token B)"
+        ]
+        pnl_data = []
+
+        meteora_pnl_df = dataframes["Meteora PnL"]
+        for _, row in meteora_pnl_df.iterrows():
+            pair = f"{row['Token X Symbol']}-{row['Token Y Symbol']}"
+            pnl_data.append([
+                row["Timestamp"],
+                row["Position ID"],
+                truncate_wallet(row["Owner"]),
+                row["Pool Address"],
+                pair,
+                f"{row['Realized PNL (USD)']:.2f}",
+                f"{row['Unrealized PNL (USD)']:.2f}",
+                f"{row['Net PNL (USD)']:.2f}",
+                f"{row['Realized PNL (Token B)']:.2f}",
+                f"{row['Unrealized PNL (Token B)']:.2f}",
+                f"{row['Net PNL (Token B)']:.2f}"
+            ])
+
+        if pnl_data:
+            put_table(pnl_data, header=pnl_headers)
+        else:
+            put_text("No PnL data found in Meteora PnL CSV.")
+
+    # Table 3: Token Hedge Summary (Rebalancing + Hedging)
     if "Rebalancing" in dataframes:
         put_markdown("## Token Hedge Summary")
         rebalancing_df = dataframes["Rebalancing"]
         
-        # Calculate LP Amount USD for each token
-        if "Meteora" in dataframes:
-            meteora_df = dataframes["Meteora"]
-            # Create a mapping of token symbols to their USD values
-            token_usd_values = {}
-            for _, row in meteora_df.iterrows():
-                token_x = row["Token X Symbol"]
-                token_y = row["Token Y Symbol"]
-                qty_x = float(row["Token X Qty"])
-                qty_y = float(row["Token Y Qty"])
-                price_x = float(row["Token X Price USD"])
-                price_y = float(row["Token Y Price USD"])
-                
-                # Add USD values for both tokens
-                if token_x not in token_usd_values:
-                    token_usd_values[token_x] = 0
-                if token_y not in token_usd_values:
-                    token_usd_values[token_y] = 0
-                    
-                token_usd_values[token_x] += qty_x * price_x
-                token_usd_values[token_y] += qty_y * price_y
-
         token_agg = rebalancing_df.groupby("Token").agg({
             "LP Qty": "sum",
             "Hedged Qty": "sum",
@@ -162,17 +201,19 @@ def main():
             token_summary["amount"] = 0
 
         token_data = []
+        krystal_df = dataframes.get("Krystal")
+        meteora_df = dataframes.get("Meteora")
+        def strip_usdt(token):
+            return token.replace("USDT", "").strip() if isinstance(token, str) else token
+
         for _, row in token_summary.iterrows():
-            token = row["Token"]
+            token = strip_usdt(row["Token"])
             lp_qty = row["LP Qty"]
             hedged_qty = row["Hedged Qty"]
             rebalance_value = row["Rebalance Value"]
             hedge_amount = row["amount"]
             
-            # Get USD value for the token
-            lp_amount_usd = token_usd_values.get(token, 0)
-            
-            # Add sign to rebalance value
+            lp_amount_usd = calculate_token_usd_value(token, krystal_df, meteora_df)
             rebalance_value_with_sign = f"{'+' if rebalance_value > 0 else ''}{rebalance_value:.4f}"
             
             token_data.append([

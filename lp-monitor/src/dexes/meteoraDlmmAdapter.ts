@@ -85,6 +85,8 @@ async function saveMeteoraPositionsToCsv(positions: PositionInfo[]): Promise<voi
       { id: 'unclaimedFeeY', title: 'Unclaimed Fee Y' },
       { id: 'tokenXPriceUsd', title: 'Token X Price USD' },
       { id: 'tokenYPriceUsd', title: 'Token Y Price USD' },
+      { id: 'tokenXPriceUsd', title: 'Token X Price USD' },
+      { id: 'tokenYPriceUsd', title: 'Token Y Price USD' },
     ],
     append: false,
   });
@@ -275,10 +277,6 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
       pos.tokenXPriceUsd = priceMap.get(tokenXMapping.coingeckoId) || 0;
       pos.tokenYPriceUsd = priceMap.get(tokenYMapping.coingeckoId) || 0;
     }
-
-    // Save to Meteora CSV with old headers
-    await saveMeteoraPositionsToCsv(positionInfos);
-
     // Update open/closed positions
     await updatePositionTracking(positionInfos);
 

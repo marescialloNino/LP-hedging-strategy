@@ -2,7 +2,7 @@
 import { config } from './config';
 import { retrieveMeteoraPositions } from './services/meteoraPositionService';
 import { retrieveKrystalPositions } from './services/krystalPositionService';
-import { generateMeteoraCSV, generateAndWriteLiquidityProfileCSV, generateKrystalCSV, writeMeteoraLatestCSV, writeKrystalLatestCSV } from './services/csvService';
+import { generateMeteoraCSV, generateLiquidityProfileCSV , generateKrystalCSV, writeMeteoraLatestCSV, writeKrystalLatestCSV } from './services/csvService';
 import { processPnlForPositions, savePnlResultsCsv } from './services/pnlResultsService';
 import { logger } from './utils/logger'; // Import logger from utils/logger
 import path from 'path';
@@ -36,7 +36,8 @@ async function processSolanaWallet(walletAddress: string): Promise<any[]> {
   const meteoraPositions = await retrieveMeteoraPositions(walletAddress);
   if (meteoraPositions.length > 0) {
     const records = await generateMeteoraCSV(walletAddress, meteoraPositions);
-    return records;
+    console.log(records)
+    return records; 
   } else {
     logger.info(`No Meteora positions found for ${walletAddress}`);
     return [];
@@ -68,6 +69,8 @@ async function main() {
     allMeteoraRecords = allMeteoraRecords.concat(meteoraRecords);
   }
 
+  console.log(allMeteoraRecords)
+
   // Write all Meteora latest positions
   if (allMeteoraRecords.length > 0) {
     await writeMeteoraLatestCSV(allMeteoraRecords);
@@ -93,7 +96,7 @@ async function main() {
   // Write combined liquidity profile for all Meteora positions
   if (allMeteoraRecords.length > 0) {
     const allMeteoraPositions = await retrieveMeteoraPositions(config.SOLANA_WALLET_ADDRESSES.join(',')); // Adjust if needed
-    await generateAndWriteLiquidityProfileCSV('all_wallets', allMeteoraPositions);
+    await generateLiquidityProfileCSV('all_wallets', allMeteoraPositions);
   } else {
     logger.info('No Meteora positions found across all wallets for liquidity profile');
   }

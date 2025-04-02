@@ -1,15 +1,15 @@
 // src/services/csvService.ts
-import fs from 'fs';
-import path from 'path';
 import { createObjectCsvWriter } from 'csv-writer';
-import { PositionInfo, LiquidityProfileEntry, KrystalPositionInfo } from './types';
+import path from 'path';
+import fs from 'fs';
+import { PositionInfo, KrystalPositionInfo } from './types';
 
-// Fixed file paths for history and latest positions
-const METEORA_HISTORY_CSV_PATH = path.join(__dirname, '../../../lp-data/LP_meteora_positions_history.csv');
-const METEORA_LATEST_CSV_PATH = path.join(__dirname, '../../../lp-data/LP_meteora_positions_latest.csv');
-const KRYSTAL_HISTORY_CSV_PATH = path.join(__dirname, '../../../lp-data/LP_krystal_positions_history.csv');
-const KRYSTAL_LATEST_CSV_PATH = path.join(__dirname, '../../../lp-data/LP_krystal_positions_latest.csv');
-const LIQUIDITY_PROFILE_CSV_PATH = path.join(__dirname, '../../../lp-data/meteora_liquidity_profiles.csv');
+const PROJECT_ROOT = path.resolve(__dirname, '../../..');
+const METEORA_LATEST_CSV_PATH = path.join(PROJECT_ROOT, 'lp-data', 'LP_meteora_positions_latest.csv');
+const METEORA_HISTORY_CSV_PATH = path.join(PROJECT_ROOT, 'lp-data', 'LP_meteora_positions_history.csv');
+const KRYSTAL_LATEST_CSV_PATH = path.join(PROJECT_ROOT, 'lp-data', 'LP_krystal_positions_latest.csv');
+const KRYSTAL_HISTORY_CSV_PATH = path.join(PROJECT_ROOT, 'lp-data', 'LP_krystal_positions_history.csv');
+const LIQUIDITY_PROFILE_CSV_PATH = path.join(PROJECT_ROOT, 'lp-data', 'meteora_liquidity_profile.csv');
 
 async function writeCSV<T extends Record<string, any>>(filePath: string, records: T[], headers: { id: string; title: string }[], append: boolean = true): Promise<void> {
   const csvWriter = createObjectCsvWriter({
@@ -22,43 +22,25 @@ async function writeCSV<T extends Record<string, any>>(filePath: string, records
   console.log(`CSV ${append ? 'appended' : 'written'} to ${filePath} with ${records.length} rows`);
 }
 
-// Helper function to calculate human-readable quantity for Krystal
-function calculateQuantity(rawAmount: string, decimals: number): number {
-  return parseFloat(rawAmount) / Math.pow(10, decimals);
-}
-
 export async function generateMeteoraCSV(walletAddress: string, positions: PositionInfo[]): Promise<any[]> {
-  const headers = [
-    { id: 'timestamp', title: 'Timestamp' },
-    { id: 'walletAddress', title: 'Wallet Address' },
-    { id: 'positionKey', title: 'Position Key' },
-    { id: 'poolAddress', title: 'Pool Address' },
-    { id: 'tokenXSymbol', title: 'Token X Symbol' }, // Add token X symbol
-    { id: 'tokenXAddress', title: 'Token X Address' },
-    { id: 'amountX', title: 'Token X Qty' },
-    { id: 'tokenYSymbol', title: 'Token Y Symbol' }, // Add token Y symbol
-    { id: 'tokenYAddress', title: 'Token Y Address' },
-    { id: 'amountY', title: 'Token Y Qty' },
-    { id: 'lowerBinId', title: 'Lower Boundary' },
-    { id: 'upperBinId', title: 'Upper Boundary' },
-    { id: 'isInRange', title: 'Is In Range' },
-    { id: 'unclaimedFeeX', title: 'Unclaimed Fee X' },
-    { id: 'unclaimedFeeY', title: 'Unclaimed Fee Y' },
-    { id: 'tokenXPriceUsd', title: 'Token X Price USD' },
-    { id: 'tokenYPriceUsd', title: 'Token Y Price USD' },
-  ];
+  console.log('[DEBUG] Entering generateMeteoraCSV');
+  const records = positions.map(pos => {
+    const tokenXQty = parseFloat(pos.amountX);
+    const tokenYQty = parseFloat(pos.amountY);
+    const tokenXPriceUsd = pos.tokenXPriceUsd || 0;
+    const tokenYPriceUsd = pos.tokenYPriceUsd || 0;
+    const tokenXUsdAmount = tokenXQty * tokenXPriceUsd;
+    const tokenYUsdAmount = tokenYQty * tokenYPriceUsd;
 
-  const records = positions
-    .filter(pos => !(pos.amountX === '0' && pos.amountY === '0'))
-    .map(pos => ({
+    const record = {
       timestamp: new Date().toISOString(),
       walletAddress,
       positionKey: pos.id,
       poolAddress: pos.pool,
-      tokenXSymbol: pos.tokenXSymbol || 'Unknown', // Use fetched symbol
+      tokenXSymbol: pos.tokenXSymbol || 'Unknown',
       tokenXAddress: pos.tokenX,
       amountX: pos.amountX,
-      tokenYSymbol: pos.tokenYSymbol || 'Unknown', // Use fetched symbol
+      tokenYSymbol: pos.tokenYSymbol || 'Unknown',
       tokenYAddress: pos.tokenY,
       amountY: pos.amountY,
       lowerBinId: pos.lowerBinId,
@@ -66,18 +48,23 @@ export async function generateMeteoraCSV(walletAddress: string, positions: Posit
       isInRange: pos.isInRange,
       unclaimedFeeX: pos.unclaimedFeeX,
       unclaimedFeeY: pos.unclaimedFeeY,
-      tokenXPriceUsd: pos.tokenXPriceUsd || 0,
-      tokenYPriceUsd: pos.tokenYPriceUsd || 0,
-    }));
+      tokenXPriceUsd,
+      tokenYPriceUsd,
+      tokenXUsdAmount,
+      tokenYUsdAmount,
+    };
 
+    console.log(`[DEBUG] Generated record for position ${pos.id}: ${JSON.stringify(record)}`);
+    return record;
+  });
 
-  // Write to history file (append)
-  await writeCSV(METEORA_HISTORY_CSV_PATH, records, headers, true);
-  // Return records for latest file
+  await writeCSV(METEORA_HISTORY_CSV_PATH, records, METEORA_LATEST_HEADERS, true);
+  console.log(`[INFO] Appended ${records.length} records to ${METEORA_HISTORY_CSV_PATH}`);
+
   return records;
 }
 
-export async function generateAndWriteLiquidityProfileCSV(walletAddress: string, positions: PositionInfo[]): Promise<void> {
+export async function generateLiquidityProfileCSV(walletAddress: string, positions: PositionInfo[]): Promise<void> {
   const headers = [
     { id: 'walletAddress', title: 'Wallet Address' },
     { id: 'positionId', title: 'Position ID' },
@@ -102,78 +89,70 @@ export async function generateAndWriteLiquidityProfileCSV(walletAddress: string,
     }))
   );
 
-  await writeCSV(LIQUIDITY_PROFILE_CSV_PATH, records, headers, false); // Overwrite mode
+  await writeCSV(LIQUIDITY_PROFILE_CSV_PATH, records, headers, false);
+  console.log(`[INFO] Wrote ${records.length} records to ${LIQUIDITY_PROFILE_CSV_PATH}`);
 }
 
 export async function generateKrystalCSV(walletAddress: string, positions: KrystalPositionInfo[]): Promise<any[]> {
-  const headers = [
-    { id: 'timestamp', title: 'Timestamp' },
-    { id: 'walletAddress', title: 'Wallet Address' },
-    { id: 'chain', title: 'Chain' },
-    { id: 'protocol', title: 'Protocol' },
-    { id: 'poolAddress', title: 'Pool Address' },
-    { id: 'tokenXSymbol', title: 'Token X Symbol' },
-    { id: 'tokenXAddress', title: 'Token X Address' },
-    { id: 'tokenXQty', title: 'Token X Qty' },
-    { id: 'tokenXPriceUsd', title: 'Token X Price USD' },
-    { id: 'tokenYSymbol', title: 'Token Y Symbol' },
-    { id: 'tokenYAddress', title: 'Token Y Address' },
-    { id: 'tokenYQty', title: 'Token Y Qty' },
-    { id: 'tokenYPriceUsd', title: 'Token Y Price USD' },
-    { id: 'minPrice', title: 'Min Price' },
-    { id: 'maxPrice', title: 'Max Price' },
-    { id: 'currentPrice', title: 'Current Price' },
-    { id: 'isInRange', title: 'Is In Range' },
-    { id: 'initialValueUsd', title: 'Initial Value USD' },
-    { id: 'actualValueUsd', title: 'Actual Value USD' },
-    { id: 'impermanentLoss', title: 'Impermanent Loss' },
-    { id: 'unclaimedFeeX', title: 'Unclaimed Fee X' },
-    { id: 'unclaimedFeeY', title: 'Unclaimed Fee Y' },
-    { id: 'feeApr', title: 'Fee APR' },
-  ];
+  const records = positions.map(pos => {
+    const tokenXQty = calculateQuantity(pos.tokenXAmount, pos.tokenXDecimals);
+    const tokenYQty = calculateQuantity(pos.tokenYAmount, pos.tokenYDecimals);
+    const tokenXPriceUsd = pos.tokenXPriceUsd || 0;
+    const tokenYPriceUsd = pos.tokenYPriceUsd || 0;
+    const tokenXUsdAmount = tokenXQty * tokenXPriceUsd;
+    const tokenYUsdAmount = tokenYQty * tokenYPriceUsd;
 
-  const records = positions.map(pos => ({
-    timestamp: new Date().toISOString(),
-    walletAddress,
-    chain: pos.chain,
-    protocol: pos.protocol,
-    poolAddress: pos.poolAddress,
-    tokenXSymbol: pos.tokenXSymbol,
-    tokenXAddress: pos.tokenXAddress,
-    tokenXQty: calculateQuantity(pos.tokenXAmount, pos.tokenXDecimals),
-    tokenXPriceUsd: pos.tokenXPriceUsd,
-    tokenYSymbol: pos.tokenYSymbol,
-    tokenYAddress: pos.tokenYAddress,
-    tokenYQty: calculateQuantity(pos.tokenYAmount, pos.tokenYDecimals),
-    tokenYPriceUsd: pos.tokenYPriceUsd,
-    minPrice: pos.minPrice,
-    maxPrice: pos.maxPrice,
-    currentPrice: pos.currentPrice,
-    isInRange: pos.isInRange,
-    initialValueUsd: pos.initialValueUsd,
-    actualValueUsd: pos.actualValueUsd,
-    impermanentLoss: pos.impermanentLoss,
-    unclaimedFeeX: calculateQuantity(pos.unclaimedFeeX, pos.tokenXDecimals),
-    unclaimedFeeY: calculateQuantity(pos.unclaimedFeeY, pos.tokenYDecimals),
-    feeApr: pos.feeApr,
-  }));
+    const record = {
+      timestamp: new Date().toISOString(),
+      walletAddress,
+      chain: pos.chain,
+      protocol: pos.protocol,
+      poolAddress: pos.poolAddress,
+      tokenXSymbol: pos.tokenXSymbol,
+      tokenXAddress: pos.tokenXAddress,
+      tokenXQty,
+      tokenXPriceUsd,
+      tokenYSymbol: pos.tokenYSymbol,
+      tokenYAddress: pos.tokenYAddress,
+      tokenYQty,
+      tokenYPriceUsd,
+      minPrice: pos.minPrice,
+      maxPrice: pos.maxPrice,
+      currentPrice: pos.currentPrice,
+      isInRange: pos.isInRange,
+      initialValueUsd: pos.initialValueUsd,
+      actualValueUsd: pos.actualValueUsd,
+      impermanentLoss: pos.impermanentLoss,
+      unclaimedFeeX: calculateQuantity(pos.unclaimedFeeX, pos.tokenXDecimals),
+      unclaimedFeeY: calculateQuantity(pos.unclaimedFeeY, pos.tokenYDecimals),
+      feeApr: pos.feeApr,
+      tokenXUsdAmount,
+      tokenYUsdAmount,
+    };
 
-  // Write to history file (append)
-  await writeCSV(KRYSTAL_HISTORY_CSV_PATH, records, headers, true);
-  // Return records for latest file
+    return record;
+  });
+
+  await writeCSV(KRYSTAL_HISTORY_CSV_PATH, records, KRYSTAL_LATEST_HEADERS, true);
+  console.log(`[INFO] Appended ${records.length} records to ${KRYSTAL_HISTORY_CSV_PATH}`);
+
   return records;
 }
 
-// Export headers and write functions for latest CSVs
+function calculateQuantity(amount: string, decimals: number): number {
+  const parsedAmount = parseFloat(amount);
+  return isNaN(parsedAmount) ? 0 : parsedAmount / Math.pow(10, decimals);
+}
+
 export const METEORA_LATEST_HEADERS = [
   { id: 'timestamp', title: 'Timestamp' },
   { id: 'walletAddress', title: 'Wallet Address' },
   { id: 'positionKey', title: 'Position Key' },
   { id: 'poolAddress', title: 'Pool Address' },
-  { id: 'tokenXSymbol', title: 'Token X Symbol' }, // Add token X symbol
+  { id: 'tokenXSymbol', title: 'Token X Symbol' },
   { id: 'tokenXAddress', title: 'Token X Address' },
   { id: 'amountX', title: 'Token X Qty' },
-  { id: 'tokenYSymbol', title: 'Token Y Symbol' }, // Add token Y symbol
+  { id: 'tokenYSymbol', title: 'Token Y Symbol' },
   { id: 'tokenYAddress', title: 'Token Y Address' },
   { id: 'amountY', title: 'Token Y Qty' },
   { id: 'lowerBinId', title: 'Lower Boundary' },
@@ -183,6 +162,8 @@ export const METEORA_LATEST_HEADERS = [
   { id: 'unclaimedFeeY', title: 'Unclaimed Fee Y' },
   { id: 'tokenXPriceUsd', title: 'Token X Price USD' },
   { id: 'tokenYPriceUsd', title: 'Token Y Price USD' },
+  { id: 'tokenXUsdAmount', title: 'Token X USD Amount' },
+  { id: 'tokenYUsdAmount', title: 'Token Y USD Amount' },
 ];
 
 export const KRYSTAL_LATEST_HEADERS = [
@@ -209,12 +190,23 @@ export const KRYSTAL_LATEST_HEADERS = [
   { id: 'unclaimedFeeX', title: 'Unclaimed Fee X' },
   { id: 'unclaimedFeeY', title: 'Unclaimed Fee Y' },
   { id: 'feeApr', title: 'Fee APR' },
+  { id: 'tokenXUsdAmount', title: 'Token X USD Amount' },
+  { id: 'tokenYUsdAmount', title: 'Token Y USD Amount' },
 ];
 
 export async function writeMeteoraLatestCSV(records: any[]): Promise<void> {
+  console.log(`[INFO] Writing ${records.length} records to ${METEORA_LATEST_CSV_PATH}`);
+  if (records.length > 0) {
+    console.log(`[DEBUG] Sample record before writing: ${JSON.stringify(records[0])}`);
+    console.log(`[DEBUG] Headers for latest CSV: ${METEORA_LATEST_HEADERS.map(h => h.title).join(', ')}`);
+  } else {
+    console.log('[WARN] No Meteora records to write');
+  }
   await writeCSV(METEORA_LATEST_CSV_PATH, records, METEORA_LATEST_HEADERS, false);
+  console.log(`[INFO] Completed writing to ${METEORA_LATEST_CSV_PATH}`);
 }
 
-export async function writeKrystalLatestCSV(records: any[]): Promise<void> {
+export async function writeKrystalLatestCSV(records: any[]): Promise<any> {
   await writeCSV(KRYSTAL_LATEST_CSV_PATH, records, KRYSTAL_LATEST_HEADERS, false);
+  console.log(`[INFO] Completed writing to ${KRYSTAL_LATEST_CSV_PATH}`);
 }
