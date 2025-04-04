@@ -3,64 +3,117 @@
 
 import os
 import pandas as pd
+import asyncio
+import numpy as np
+import json
+import sys
+import logging
+import uuid
+import atexit
+
+
+# Fix for Windows event loop issue
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+main_loop = asyncio.get_event_loop()
+
 from pywebio import start_server
 from pywebio.output import *
+from pywebio.session import run_async  # Import run_async for session context
+
+# Import from hedge-automation folder
+from hedge_automation.data_handler import BrokerHandler
+from hedge_automation.hedge_orders_sender import BitgetOrderSender 
+from hedge_automation import datafeed
+
+# Set up logging to output to terminal
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "lp-data")
+DATA_DIR = os.path.join(SCRIPT_DIR, "../lp-data")
 
 # CSV file paths (relative to DATA_DIR)
 REBALANCING_CSV = os.path.join(DATA_DIR, "rebalancing_results.csv")
 KRYSTAL_CSV = os.path.join(DATA_DIR, "LP_krystal_positions_latest.csv")
 METEORA_CSV = os.path.join(DATA_DIR, "LP_meteora_positions_latest.csv")
 HEDGING_CSV = os.path.join(DATA_DIR, "hedging_positions_latest.csv")
-METEORA_PNL_CSV = os.path.join(DATA_DIR, "position_pnl_results.csv")  # New PnL CSV
+METEORA_PNL_CSV = os.path.join(DATA_DIR, "position_pnl_results.csv")
 
-# Placeholder function for hedge trade execution with Bitget message
-def execute_hedge_trade(token, rebalance_value):
+# Set up BrokerHandler and BitgetOrderSender globally in dummy mode
+params = {
+    'exchange_trade': 'bitget',
+    'account_trade': 'H1',
+    'send_orders': 'dummy'
+}
+end_point = BrokerHandler.build_end_point('bitget', account='H1')
+bh = BrokerHandler(
+    market_watch='bitget',
+    strategy_param=params,
+    end_point_trade=end_point,
+    logger_name='bitget_order_sender'
+)
+order_sender = BitgetOrderSender(bh)
+
+async def execute_hedge_trade(token, rebalance_value):
+    logger = logging.getLogger('hedge_execution')
+    logger.info(f"Hedge button pressed for token: {token}, rebalance_value: {rebalance_value}")
+    print(f"DEBUG: Executing hedge for {token}", flush=True)
+    
     order_size = abs(rebalance_value)
-    order_type = "Buy" if rebalance_value > 0 else "Sell"
-    order_message = f"Placing {order_type} order on Bitget: {order_size:.4f} {token} @ market price"
-    put_text(order_message)
-    toast(f"Hedge trade triggered for {token}: {order_message}", duration=5, color="success")
+    direction = 1 if rebalance_value > 0 else -1
+    ticker = f"{token}USDT"
+    logger.info(f"Sending order for ticker: {ticker} with order_size: {order_size} and direction: {direction}")
+    
+    result, request = await order_sender.send_order(ticker, direction, order_size)
+    logger.info(f"Result from send_order: {result}")
+    
+    if result:     
+        logger.info("Hedge order request built successfully")
+        
+
+        return {
+            'success': True,
+            'token': token,  
+            'request': request         
+        }
+    else:
+        logger.error(f"Failed to generate hedge order for {token}")
+        return {'success': False, 'token': token}
 
 # Function to truncate wallet address
 def truncate_wallet(wallet):
     return f"{wallet[:5]}..." if isinstance(wallet, str) and len(wallet) > 5 else wallet
 
-# Function to calculate total USD value for a token from Krystal and Meteora CSVs
+# Function to calculate total USD value for a token
 def calculate_token_usd_value(token, krystal_df=None, meteora_df=None):
     total_usd = 0.0
-
-    # Process Krystal positions
     if krystal_df is not None and not krystal_df.empty:
-        # Check Token X
         token_x_matches = krystal_df[krystal_df["Token X Symbol"] == token]
         for _, row in token_x_matches.iterrows():
             total_usd += float(row["Token X USD Amount"]) if pd.notna(row["Token X USD Amount"]) else 0
-
-        # Check Token Y
         token_y_matches = krystal_df[krystal_df["Token Y Symbol"] == token]
         for _, row in token_y_matches.iterrows():
             total_usd += float(row["Token Y USD Amount"]) if pd.notna(row["Token Y USD Amount"]) else 0
-
-    # Process Meteora positions
     if meteora_df is not None and not meteora_df.empty:
-        # Check Token X
         token_x_matches = meteora_df[meteora_df["Token X Symbol"] == token]
         for _, row in token_x_matches.iterrows():
             total_usd += float(row["Token X USD Amount"]) if pd.notna(row["Token X USD Amount"]) else 0
-
-        # Check Token Y
         token_y_matches = meteora_df[meteora_df["Token Y Symbol"] == token]
         for _, row in token_y_matches.iterrows():
             total_usd += float(row["Token Y USD Amount"]) if pd.notna(row["Token Y USD Amount"]) else 0
-
     return total_usd
 
-# Main web application function
-def main():
+async def main():
+    put_markdown("# Hedging Dashboard")
+    
     # Load CSVs with error handling
     csv_files = {
         "Rebalancing": REBALANCING_CSV,
@@ -78,7 +131,6 @@ def main():
 
     # Table 1: Wallet Positions (Krystal and Meteora)
     put_markdown("## Wallet Positions")
-
     wallet_headers = [
         "Source", "Wallet", "Chain", "Protocol", "Pair", "Token X Qty", "Token Y Qty", "Current Price", "Min Price", "Max Price",
         "In Range", "Fee APR", "Initial USD", "Present USD", "Pool Address"
@@ -118,7 +170,6 @@ def main():
             price_x = float(row["Token X Price USD"]) if pd.notna(row["Token X Price USD"]) else 0
             price_y = float(row["Token Y Price USD"]) if pd.notna(row["Token Y Price USD"]) else 0
             present_usd = (qty_x * price_x) + (qty_y * price_y)
-            
             wallet_data.append([
                 "Meteora",
                 truncate_wallet(row["Wallet Address"]),
@@ -145,14 +196,12 @@ def main():
     # Table 2: Meteora Positions PnL
     if "Meteora PnL" in dataframes:
         put_markdown("## Meteora Positions PnL")
-        
         pnl_headers = [
             "Timestamp", "Position ID", "Owner", "Pool Address", "Pair",
             "Realized PNL (USD)", "Unrealized PNL (USD)", "Net PNL (USD)",
             "Realized PNL (Token B)", "Unrealized PNL (Token B)", "Net PNL (Token B)"
         ]
         pnl_data = []
-
         meteora_pnl_df = dataframes["Meteora PnL"]
         for _, row in meteora_pnl_df.iterrows():
             pair = f"{row['Token X Symbol']}-{row['Token Y Symbol']}"
@@ -169,7 +218,6 @@ def main():
                 f"{row['Unrealized PNL (Token B)']:.2f}",
                 f"{row['Net PNL (Token B)']:.2f}"
             ])
-
         if pnl_data:
             put_table(pnl_data, header=pnl_headers)
         else:
@@ -183,7 +231,8 @@ def main():
         token_agg = rebalancing_df.groupby("Token").agg({
             "LP Qty": "sum",
             "Hedged Qty": "sum",
-            "Rebalance Value": "sum"
+            "Rebalance Value": "sum",
+            "Rebalance Action": "first"   # Use the first encountered action for each token
         }).reset_index()
 
         if "Hedging" in dataframes:
@@ -206,15 +255,33 @@ def main():
         def strip_usdt(token):
             return token.replace("USDT", "").strip() if isinstance(token, str) else token
 
+        async def handle_hedge_click(token, rebalance_value):
+            result = await execute_hedge_trade(token, rebalance_value)
+            if result['success']:
+                put_markdown(f"### Hedge Order Request for {result['token']}")
+                put_code(json.dumps(result['request'], indent=2), language='json')  # Display the POST request JSON
+                toast(f"Hedge trade triggered for {result['token']}", duration=5, color="success")
+            else:
+                toast(f"Failed to generate hedge order for {result['token']}", duration=5, color="error")
+
         for _, row in token_summary.iterrows():
             token = strip_usdt(row["Token"])
             lp_qty = row["LP Qty"]
             hedged_qty = row["Hedged Qty"]
             rebalance_value = row["Rebalance Value"]
             hedge_amount = row["amount"]
+            action = row["Rebalance Action"].strip().lower()  
             
             lp_amount_usd = calculate_token_usd_value(token, krystal_df, meteora_df)
-            rebalance_value_with_sign = f"{'+' if rebalance_value > 0 else ''}{rebalance_value:.4f}"
+            rebalance_value_with_sign = float(f"{'+' if action == 'buy' else '-'}{abs(rebalance_value):.6f}")
+            
+            if abs(rebalance_value) != 0.0:
+                button = put_buttons(
+                    [{'label': 'Hedge', 'value': token, 'color': 'primary'}],
+                    onclick=lambda t, rv=rebalance_value_with_sign: run_async(handle_hedge_click(t, rv))
+                )
+            else:
+                button = put_text("No hedge needed")
             
             token_data.append([
                 token,
@@ -223,12 +290,11 @@ def main():
                 f"{hedge_amount:.4f}",
                 f"{lp_amount_usd:.2f}",
                 rebalance_value_with_sign,
-                put_buttons([{'label': 'Hedge', 'value': token, 'color': 'primary'}], 
-                           onclick=lambda t, rv=rebalance_value: execute_hedge_trade(t, rv))
+                button
             ])
-        
+                
         token_headers = [
-            "Token", "LP Qty", "Hedged Qty", "Hedged Amount (USDT)", 
+            "Token", "LP Qty", "Hedge Qty", "Hedge Amount USD", 
             "LP Amount USD", "Suggested Hedge Qty", "Action"
         ]
         put_table(token_data, header=token_headers)
@@ -239,8 +305,13 @@ def main():
             "quantity": "sum",
             "amount": "sum"
         }).reset_index().to_dict('records')
-        put_table(token_data, header=["Token", "Hedged Qty", "Hedged Amount (USDT)"])
+        put_table(token_data, header=["Token", "Hedge Qty", "Hedge Amount USD"])
 
-# Start the PyWebIO server
+# Ensure cleanup on exit
+def cleanup():
+    asyncio.run(order_sender.close())
+
+atexit.register(cleanup)
+
 if __name__ == "__main__":
     start_server(main, port=8080, host="0.0.0.0", debug=True)
