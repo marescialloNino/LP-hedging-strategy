@@ -1,5 +1,5 @@
 import asyncio
-import datafeed.bitgetfeed as bg
+from .datafeed import bitgetfeed as bg
 import sys
 import os
 from dotenv import load_dotenv
