@@ -2,10 +2,10 @@ import logging
 import asyncio
 import ccxt
 
-from datafeed.bitgetfeed import BitgetMarket  
-from datafeed.dummyfeed import DummyMarket    
-from datafeed.motherfeeder import MotherFeeder
-from datafeed.utils_online import extract_coin_with_factor, build_symbol
+from .datafeed.bitgetfeed import BitgetMarket  
+from .datafeed.dummyfeed import DummyMarket    
+from .datafeed.motherfeeder import MotherFeeder
+from .datafeed.utils_online import extract_coin_with_factor, build_symbol
 
 class BrokerHandler:
     def __init__(self, market_watch, strategy_param, end_point_trade, logger_name):

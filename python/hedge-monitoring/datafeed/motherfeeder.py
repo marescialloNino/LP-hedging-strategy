@@ -5,8 +5,8 @@ import time
 import datetime
 import pandas as pd
 from abc import abstractmethod, ABC
-from datafeed.downsample import create_bars
-import datafeed.df_constants as constants
+from .downsample import create_bars
+from . import df_constants as constants
 from ccxt.base.errors import BadSymbol
 
 

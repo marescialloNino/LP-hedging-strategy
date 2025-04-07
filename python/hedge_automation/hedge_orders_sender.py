@@ -16,7 +16,7 @@ EXECUTION_IP = os.getenv("EXECUTION_IP")
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from data_handler import BrokerHandler
+from .data_handler import BrokerHandler
 
 class BitgetOrderSender:
     AMAZON_URL = f'http://{EXECUTION_IP}:8080/api'

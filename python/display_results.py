@@ -39,7 +39,7 @@ logging.basicConfig(
 
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "../../lp-data")
+DATA_DIR = os.path.join(SCRIPT_DIR, "../lp-data")
 
 # CSV file paths (relative to DATA_DIR)
 REBALANCING_CSV = os.path.join(DATA_DIR, "rebalancing_results.csv")

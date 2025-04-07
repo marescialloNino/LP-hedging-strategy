@@ -4,7 +4,7 @@ import ccxt.pro
 from datetime import datetime
 
 import pandas as pd
-from datafeed.motherfeeder import MotherFeeder
+from .motherfeeder import MotherFeeder
 
 
 class BitgetMarket(MotherFeeder):

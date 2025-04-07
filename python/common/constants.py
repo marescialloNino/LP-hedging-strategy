@@ -59,7 +59,7 @@ HEDGABLE_TOKENS = {
 # File paths (relative to lp-monitor output)
 METEORA_LATEST_CSV = "./lp-data/LP_meteora_positions_latest.csv"
 KRYSTAL_LATEST_CSV = "./lp-data/LP_krystal_positions_latest.csv"
-HEDGE_LATEST_CSV = "./../lp-data/hedging_positions_latest.csv"
+HEDGE_LATEST_CSV = "./lp-data/hedging_positions_latest.csv"
 
 METEORA_HISTORY_CSV = "./lp-data/LP_meteora_positions_history.csv"
 KRYSTAL_HISTORY_CSV = "./lp-data/LP_krystal_positions_history.csv"

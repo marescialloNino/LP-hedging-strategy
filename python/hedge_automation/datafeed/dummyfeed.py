@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 import time
-from datafeed.motherfeeder import MotherFeeder
+from .motherfeeder import MotherFeeder
 
 
 class DummyEndPoint(object):
