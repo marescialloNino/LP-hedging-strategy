@@ -23,9 +23,10 @@ from pywebio.output import *
 from pywebio.session import run_async  # Import run_async for session context
 
 # Import from hedge-automation folder
-from data_handler import BrokerHandler
-from hedge_orders_sender import BitgetOrderSender 
+from hedge_automation.data_handler import BrokerHandler
+from hedge_automation.hedge_orders_sender import BitgetOrderSender 
 
+from common.constants import HEDGABLE_TOKENS
 
 # Set up logging to output to terminal
 logging.basicConfig(
@@ -38,7 +39,7 @@ logging.basicConfig(
 
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "../lp-data")
+DATA_DIR = os.path.join(SCRIPT_DIR, "../../lp-data")
 
 # CSV file paths (relative to DATA_DIR)
 REBALANCING_CSV = os.path.join(DATA_DIR, "rebalancing_results.csv")
@@ -92,23 +93,64 @@ async def execute_hedge_trade(token, rebalance_value):
 def truncate_wallet(wallet):
     return f"{wallet[:5]}..." if isinstance(wallet, str) and len(wallet) > 5 else wallet
 
-# Function to calculate total USD value for a token
+
+
 def calculate_token_usd_value(token, krystal_df=None, meteora_df=None):
+    """
+    Calculate total USD value for a token based on its addresses from HEDGABLE_TOKENS.
+    
+    Args:
+        token (str): Bitget ticker (e.g., "SONICUSDT", "BNBUSDT")
+        krystal_df (pd.DataFrame): Krystal LP positions
+        meteora_df (pd.DataFrame): Meteora LP positions
+    
+    Returns:
+        float: Total USD value of the token across LP positions
+    """
     total_usd = 0.0
+    token = f"{token}USDT"
+    # Check if token is in HEDGABLE_TOKENS
+    if token not in HEDGABLE_TOKENS:
+        print(f"Warning: Token {token} not found in HEDGABLE_TOKENS. Returning 0 USD.")
+        return total_usd
+
+    # Get all possible addresses for the token across chains
+    token_info = HEDGABLE_TOKENS[token]
+    all_addresses = []
+    for chain, addresses in token_info.items():
+        all_addresses.extend(addresses)
+
+    # Remove duplicates (e.g., wrapped and native might overlap)
+    unique_addresses = set(all_addresses)
+
+    # Process Krystal LP data (multi-chain)
     if krystal_df is not None and not krystal_df.empty:
-        token_x_matches = krystal_df[krystal_df["Token X Symbol"] == token]
-        for _, row in token_x_matches.iterrows():
-            total_usd += float(row["Token X USD Amount"]) if pd.notna(row["Token X USD Amount"]) else 0
-        token_y_matches = krystal_df[krystal_df["Token Y Symbol"] == token]
-        for _, row in token_y_matches.iterrows():
-            total_usd += float(row["Token Y USD Amount"]) if pd.notna(row["Token Y USD Amount"]) else 0
+        for address in unique_addresses:
+            # Match by Token X Address
+            token_x_matches = krystal_df[krystal_df["Token X Address"] == address]
+            for _, row in token_x_matches.iterrows():
+                total_usd += float(row["Token X USD Amount"]) if pd.notna(row["Token X USD Amount"]) else 0
+            
+            # Match by Token Y Address
+            token_y_matches = krystal_df[krystal_df["Token Y Address"] == address]
+            for _, row in token_y_matches.iterrows():
+                total_usd += float(row["Token Y USD Amount"]) if pd.notna(row["Token Y USD Amount"]) else 0
+
+    # Process Meteora LP data (Solana-specific)
     if meteora_df is not None and not meteora_df.empty:
-        token_x_matches = meteora_df[meteora_df["Token X Symbol"] == token]
-        for _, row in token_x_matches.iterrows():
-            total_usd += float(row["Token X USD Amount"]) if pd.notna(row["Token X USD Amount"]) else 0
-        token_y_matches = meteora_df[meteora_df["Token Y Symbol"] == token]
-        for _, row in token_y_matches.iterrows():
-            total_usd += float(row["Token Y USD Amount"]) if pd.notna(row["Token Y USD Amount"]) else 0
+        # Meteora is Solana-only, so filter addresses for Solana if available
+        solana_addresses = token_info.get("solana", all_addresses)
+        for address in set(solana_addresses):
+            # Match by Token X Address
+            token_x_matches = meteora_df[meteora_df["Token X Address"] == address]
+            for _, row in token_x_matches.iterrows():
+                total_usd += float(row["Token X USD Amount"]) if pd.notna(row["Token X USD Amount"]) else 0
+            
+            # Match by Token Y Address
+            token_y_matches = meteora_df[meteora_df["Token Y Address"] == address]
+            for _, row in token_y_matches.iterrows():
+                total_usd += float(row["Token Y USD Amount"]) if pd.notna(row["Token Y USD Amount"]) else 0
+
     return total_usd
 
 async def main():

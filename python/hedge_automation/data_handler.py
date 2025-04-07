@@ -2,8 +2,8 @@ import logging
 import asyncio
 import ccxt
 
-from datafeed.bitgetfeed import BitgetMarket  # Only need Bitget feed
-from datafeed.dummyfeed import DummyMarket    # For dummy mode
+from datafeed.bitgetfeed import BitgetMarket  
+from datafeed.dummyfeed import DummyMarket    
 from datafeed.motherfeeder import MotherFeeder
 from datafeed.utils_online import extract_coin_with_factor, build_symbol
 

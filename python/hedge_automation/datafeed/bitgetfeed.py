@@ -2,6 +2,7 @@ import os
 import ccxt
 import ccxt.pro
 from datetime import datetime
+
 import pandas as pd
 from datafeed.motherfeeder import MotherFeeder
 
@@ -33,7 +34,6 @@ class BitgetMarket(MotherFeeder):
                 self.__API_KEY = os.environ['BITGET_HEDGE1_API_KEY']
                 self.__API_SEC = os.environ['BITGET_HEDGE1_API_SECRET']
                 self.__PASS__ = os.environ['BITGET_API_PASSWORD']
-
         except:
             pass
 

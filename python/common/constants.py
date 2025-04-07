@@ -11,14 +11,14 @@ HEDGABLE_TOKENS = {
         "polygon": ["0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39"]
     },
     "POLUSDT": {
-        "polygon": ["0xcccccccccccccccccccccccccccccccccccccccc"]
+        "polygon": ["0xcccccccccccccccccccccccccccccccccccccccc","0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270"]
     },
     "AAVEUSDT": {
         "polygon": ["0xd6df932a45c0f255f85145f286ea0b292b21c90b"]
     },
     
     "BNBUSDT": {
-        "bsc": ["0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]
+        "bsc": ["0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"]
     },
     "CAKEUSDT": {
         "bsc": ["0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82"]
@@ -31,7 +31,7 @@ HEDGABLE_TOKENS = {
         "arbitrum": ["0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a"]
     },
     "SONICUSDT": {
-        "sonic" : ["0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"]
+        "sonic" : ["0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "0x039e2fb66102314ce7b64ce5ce3e5183bc94ad38"]
     },
     "KILOUSDT": {
         "bsc" : ["0x503fa24b7972677f00c4618e5fbe237780c1df53"]
@@ -59,7 +59,7 @@ HEDGABLE_TOKENS = {
 # File paths (relative to lp-monitor output)
 METEORA_LATEST_CSV = "./lp-data/LP_meteora_positions_latest.csv"
 KRYSTAL_LATEST_CSV = "./lp-data/LP_krystal_positions_latest.csv"
-HEDGE_LATEST_CSV = "./lp-data/hedging_positions_latest.csv"
+HEDGE_LATEST_CSV = "./../lp-data/hedging_positions_latest.csv"
 
 METEORA_HISTORY_CSV = "./lp-data/LP_meteora_positions_history.csv"
 KRYSTAL_HISTORY_CSV = "./lp-data/LP_krystal_positions_history.csv"

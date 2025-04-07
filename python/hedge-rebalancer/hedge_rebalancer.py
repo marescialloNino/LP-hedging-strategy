@@ -2,7 +2,7 @@
 # hedge_rebalancer.py
 import pandas as pd
 import os
-from constants import HEDGABLE_TOKENS, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGE_LATEST_CSV
+from common.constants import HEDGABLE_TOKENS, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGE_LATEST_CSV
 from datetime import datetime
 import csv
 import logging
