@@ -44,11 +44,15 @@ class BitgetOrderSender:
         """Fetch the last closing price for the given ticker"""
         try:
             symbol, _ = self.broker_handler.symbol_to_market_with_factor(ticker, universal=False)
-            ohlcv = await self.broker_handler._end_point_trade._exchange_async.fetch_ohlcv(
-                symbol, timeframe='1m', limit=1
+            # Wrap the fetch call in a task to ensure there’s an active task context.
+            fetch_task = asyncio.create_task(
+                self.broker_handler._end_point_trade._exchange_async.fetch_ohlcv(
+                    symbol, timeframe='1m', limit=1
+                )
             )
+            ohlcv = await fetch_task
             if ohlcv and len(ohlcv) > 0:
-                last_price = ohlcv[0][4]  # Close price from [timestamp, open, high, low, close, volume]
+                last_price = ohlcv[0][4]  # Close price
                 self.logger.info(f"Fetched last price for {ticker}: ${last_price}")
                 return last_price
             else:

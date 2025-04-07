@@ -297,14 +297,38 @@ async def main():
         def strip_usdt(token):
             return token.replace("USDT", "").strip() if isinstance(token, str) else token
 
-        async def handle_hedge_click(token, rebalance_value):
+        """ async def handle_hedge_click(token, rebalance_value):
             result = await execute_hedge_trade(token, rebalance_value)
             if result['success']:
                 put_markdown(f"### Hedge Order Request for {result['token']}")
                 put_code(json.dumps(result['request'], indent=2), language='json')  # Display the POST request JSON
                 toast(f"Hedge trade triggered for {result['token']}", duration=5, color="success")
             else:
-                toast(f"Failed to generate hedge order for {result['token']}", duration=5, color="error")
+                toast(f"Failed to generate hedge order for {result['token']}", duration=5, color="error") """
+
+        
+        hedge_processing = {}
+
+        async def handle_hedge_click(token, rebalance_value):
+            # Check if this token is already being processed
+            if hedge_processing.get(token, False):
+                toast(f"Hedge already in progress for {token}", duration=5, color="warning")
+                return
+
+            hedge_processing[token] = True
+            try:
+                result = await execute_hedge_trade(token, rebalance_value)
+                if result['success']:
+                    put_markdown(f"### Hedge Order Request for {result['token']}")
+                    put_code(json.dumps(result['request'], indent=2), language='json')
+                    toast(f"Hedge trade triggered for {result['token']}", duration=5, color="success")
+                else:
+                    toast(f"Failed to generate hedge order for {result['token']}", duration=5, color="error")
+            except Exception as e:
+                logging.getLogger('hedge_execution').error(f"Exception for token {token}: {e}")
+                toast(f"Error processing hedge for {token}", duration=5, color="error")
+            finally:
+                hedge_processing[token] = False            
 
         for _, row in token_summary.iterrows():
             token = strip_usdt(row["Token"])
