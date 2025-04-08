@@ -80,20 +80,22 @@ async def execute_hedge_trade(token, rebalance_value):
     ticker = f"{token}USDT"
     logger.info(f"Sending order for ticker: {ticker} with order_size: {order_size} and direction: {direction}")
     
-    result, request = await order_sender.send_order(ticker, direction, order_size)
-    logger.info(f"Result from send_order: {result}")
-    
-    if result:     
-        logger.info("Hedge order request built successfully")
+    try:
+        result, request = await order_sender.send_order(ticker, direction, order_size)
+        logger.info(f"Result from send_order: success={result}, request={request}")
         
-
-        return {
-            'success': True,
-            'token': token,  
-            'request': request         
-        }
-    else:
-        logger.error(f"Failed to generate hedge order for {token}")
+        if result:
+            logger.info("Hedge order request built and sent successfully")
+            return {
+                'success': True,
+                'token': token,
+                'request': request
+            }
+        else:
+            logger.error(f"Failed to send hedge order for {token}")
+            return {'success': False, 'token': token}
+    except Exception as e:
+        logger.error(f"Exception in send_order for {token}: {str(e)}", exc_info=True)
         return {'success': False, 'token': token}
 
 # Function to truncate wallet address
@@ -308,14 +310,19 @@ async def main():
         hedge_processing = {}
 
         async def handle_hedge_click(token, rebalance_value):
-            # Check if this token is already being processed
+            logger = logging.getLogger('hedge_execution')
+            logger.info(f"Handling hedge click for {token} with rebalance_value {rebalance_value}")
+            
             if hedge_processing.get(token, False):
                 toast(f"Hedge already in progress for {token}", duration=5, color="warning")
                 return
 
             hedge_processing[token] = True
             try:
-                result = await execute_hedge_trade(token, rebalance_value)
+                # Explicitly create a task to ensure it runs
+                task = asyncio.create_task(execute_hedge_trade(token, rebalance_value))
+                result = await task  # Wait for the task to complete
+                
                 if result['success']:
                     put_markdown(f"### Hedge Order Request for {result['token']}")
                     put_code(json.dumps(result['request'], indent=2), language='json')
@@ -323,10 +330,10 @@ async def main():
                 else:
                     toast(f"Failed to generate hedge order for {result['token']}", duration=5, color="error")
             except Exception as e:
-                logging.getLogger('hedge_execution').error(f"Exception for token {token}: {e}")
+                logger.error(f"Exception in handle_hedge_click for {token}: {str(e)}", exc_info=True)
                 toast(f"Error processing hedge for {token}", duration=5, color="error")
             finally:
-                hedge_processing[token] = False            
+                hedge_processing[token] = False          
 
         for _, row in token_summary.iterrows():
             token = strip_usdt(row["Token"])
@@ -341,9 +348,9 @@ async def main():
             
             if abs(rebalance_value) != 0.0:
                 button = put_buttons(
-                    [{'label': 'Hedge', 'value': token, 'color': 'primary'}],
-                    onclick=lambda t, rv=rebalance_value_with_sign: run_async(handle_hedge_click(t, rv))
-                )
+                            [{'label': 'Hedge', 'value': token, 'color': 'primary'}],
+                            onclick=lambda t, rv=rebalance_value_with_sign: run_async(handle_hedge_click(t, rv))
+                        )
             else:
                 button = put_text("No hedge needed")
             
