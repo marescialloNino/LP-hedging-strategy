@@ -39,16 +39,27 @@ logging.basicConfig(
     ]
 )
 
-# Get the directory where this script is located
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "../lp-data")
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 
-# CSV file paths (relative to DATA_DIR)
-REBALANCING_CSV = os.path.join(DATA_DIR, "rebalancing_results.csv")
-KRYSTAL_LATEST_CSV = os.path.join(DATA_DIR, "LP_krystal_positions_latest.csv")
-METEORA_LATEST_CSV = os.path.join(DATA_DIR, "LP_meteora_positions_latest.csv")
-HEDGING_CSV = os.path.join(DATA_DIR, "hedging_positions_latest.csv")
-METEORA_PNL_CSV = os.path.join(DATA_DIR, "position_pnl_results.csv")
+# Load environment variables
+load_dotenv()
+
+# Use environment variables for paths
+LOG_DIR = Path(os.getenv('LP_HEDGE_LOG_DIR', './logs')).resolve()
+DATA_DIR = Path(os.getenv('LP_HEDGE_DATA_DIR', './lp-data')).resolve()
+
+# Ensure directories exist
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# CSV file paths
+REBALANCING_CSV = DATA_DIR / "rebalancing_results.csv"
+KRYSTAL_LATEST_CSV = DATA_DIR / "LP_krystal_positions_latest.csv"
+METEORA_LATEST_CSV = DATA_DIR / "LP_meteora_positions_latest.csv"
+HEDGING_CSV = DATA_DIR / "hedging_positions_latest.csv"
+METEORA_PNL_CSV = DATA_DIR / "position_pnl_results.csv"
 
 # Set up BrokerHandler and BitgetOrderSender globally in dummy mode
 params = {
