@@ -19,7 +19,7 @@ if sys.platform == 'win32':
 from .data_handler import BrokerHandler
 
 class BitgetOrderSender:
-    AMAZON_URL = f'http://{EXECUTION_IP}:8080/api'
+    AMAZON_URL = f'http://{EXECUTION_IP}:/api'
     AMAZON_UPI_SINGLE = AMAZON_URL + '/manualOrder/createOrUpdate'
     
     def __init__(self, broker_handler):
@@ -169,19 +169,18 @@ class BitgetOrderSender:
         """Close the exchange connection"""
         await self.broker_handler.close_exchange_async()
 
-# Updated test function to just call send_order like in a webapp
 async def test_order_sender():
     # Configure logging
     logging.basicConfig(level=logging.INFO)
     
-    # Set up BrokerHandler for Bitget in dummy mode
+    # Set up BrokerHandler for Bitget in real mode
     params = {
         'exchange_trade': 'bitget',
         'account_trade': 'hedge1',
-        'send_orders': 'dummy'  # Ensure dummy mode for testing
+        'send_orders': 'bitget'  # Change from 'dummy' to 'bitget' or remove this key
     }
     
-    end_point = BrokerHandler.build_end_point('bitget', account='H1')
+    end_point = BrokerHandler.build_end_point('bitget', account='H1')  # 'H1' matches BITGET_HEDGE1_API_KEY
     bh = BrokerHandler(
         market_watch='bitget',
         strategy_param=params,
@@ -193,37 +192,23 @@ async def test_order_sender():
     order_sender = BitgetOrderSender(bh)
     
     try:
-        # Test parameters - exactly as you'd call it from webapp
+        # Test parameters
         ticker = 'ETHUSDT'
         direction = 1  # Buy
-        hedge_qty = 0.5  # 0.5 ETH
+        hedge_qty = 0.3  # 0.5 ETH
         
-        # Call send_order just like in your webapp
-        result = await order_sender.send_order(ticker, direction, hedge_qty)
-        print(f"\nTest completed with result: {result}")
+        # Send the order to the real execution machine
+        success, request = await order_sender.send_order(ticker, direction, hedge_qty)
+        print(f"\nTest completed with result: Success={success}, Request={request}")
         
+        if success:
+            print("Order sent successfully to the execution machine!")
+        else:
+            print("Failed to send order. Check logs for details.")
+    
     finally:
         # Cleanup
         await order_sender.close()
-
-
-
-""" class TestClass:
-    async def send_order(self, ticker, direction, hedge_qty):
-        print("\n=== Sending Order ===")
-        print(f"Ticker: {ticker}")
-        print(f"Direction: {direction}")
-        print(f"Quantity: {hedge_qty}")
-        print("This should appear in output")
-        return True
-
-async def test():
-    tester = TestClass()
-    result = await tester.send_order("ETHUSDT", "BUY", 0.5)
-    print(f"Result: {result}")
-
-if __name__ == "__main__":
-    asyncio.run(test()) """
 
 if __name__ == "__main__":
     asyncio.run(test_order_sender())
