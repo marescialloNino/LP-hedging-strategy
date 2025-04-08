@@ -39,28 +39,6 @@ logging.basicConfig(
     ]
 )
 
-import os
-from pathlib import Path
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
-# Use environment variables for paths
-LOG_DIR = Path(os.getenv('LP_HEDGE_LOG_DIR', './logs')).resolve()
-DATA_DIR = Path(os.getenv('LP_HEDGE_DATA_DIR', './lp-data')).resolve()
-
-# Ensure directories exist
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-# CSV file paths
-REBALANCING_CSV = DATA_DIR / "rebalancing_results.csv"
-KRYSTAL_LATEST_CSV = DATA_DIR / "LP_krystal_positions_latest.csv"
-METEORA_LATEST_CSV = DATA_DIR / "LP_meteora_positions_latest.csv"
-HEDGING_CSV = DATA_DIR / "hedging_positions_latest.csv"
-METEORA_PNL_CSV = DATA_DIR / "position_pnl_results.csv"
-
 # Set up BrokerHandler and BitgetOrderSender globally in dummy mode
 params = {
     'exchange_trade': 'bitget',
@@ -309,15 +287,6 @@ async def main():
         meteora_df = dataframes.get("Meteora")
         def strip_usdt(token):
             return token.replace("USDT", "").strip() if isinstance(token, str) else token
-
-        """ async def handle_hedge_click(token, rebalance_value):
-            result = await execute_hedge_trade(token, rebalance_value)
-            if result['success']:
-                put_markdown(f"### Hedge Order Request for {result['token']}")
-                put_code(json.dumps(result['request'], indent=2), language='json')  # Display the POST request JSON
-                toast(f"Hedge trade triggered for {result['token']}", duration=5, color="success")
-            else:
-                toast(f"Failed to generate hedge order for {result['token']}", duration=5, color="error") """
 
         
         hedge_processing = {}
