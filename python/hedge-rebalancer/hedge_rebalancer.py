@@ -1,24 +1,21 @@
-
 # hedge_rebalancer.py
 import pandas as pd
-import os
-from common.constants import HEDGABLE_TOKENS, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGE_LATEST_CSV
-from datetime import datetime
-import csv
 import logging
 import sys
+import csv
+from datetime import datetime
+from common.constants import HEDGABLE_TOKENS
+from common.path_config import (
+    LOG_DIR, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGING_LATEST_CSV,
+    REBALANCING_HISTORY_DIR, REBALANCING_LATEST_CSV
+)
 
-# Directory setup and logging configuration remains unchanged
-log_dir = os.getenv('LP_HEDGE_LOG_DIR', './logs')
-data_dir = os.getenv('LP_HEDGE_DATA_DIR', './lp-data')
-os.makedirs(log_dir, exist_ok=True)
-os.makedirs(data_dir, exist_ok=True)
-
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(os.path.join(log_dir, 'hedge_rebalancer.log')),
+        logging.FileHandler(LOG_DIR / 'hedge_rebalancer.log'),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -27,18 +24,18 @@ logger = logging.getLogger(__name__)
 def calculate_hedge_quantities():
     """Calculate total hedged quantities from Bitget positions by symbol (always negative)."""
     hedge_quantities = {symbol: 0.0 for symbol in HEDGABLE_TOKENS}
-    if os.path.exists(HEDGE_LATEST_CSV):
+    if HEDGING_LATEST_CSV.exists():
         try:
-            hedge_df = pd.read_csv(HEDGE_LATEST_CSV)
+            hedge_df = pd.read_csv(HEDGING_LATEST_CSV)
             for _, row in hedge_df.iterrows():
                 symbol = row["symbol"]
                 qty = float(row["quantity"] or 0)  # Negative for short positions
                 if symbol in HEDGABLE_TOKENS:
                     hedge_quantities[symbol] += qty
         except Exception as e:
-            logger.error(f"Error reading {HEDGE_LATEST_CSV}: {e}")
+            logger.error(f"Error reading {HEDGING_LATEST_CSV}: {e}")
     else:
-        logger.warning(f"{HEDGE_LATEST_CSV} not found.")
+        logger.warning(f"{HEDGING_LATEST_CSV} not found.")
     return hedge_quantities
 
 def calculate_lp_quantities():
@@ -46,7 +43,7 @@ def calculate_lp_quantities():
     lp_quantities = {symbol: 0.0 for symbol in HEDGABLE_TOKENS}
     
     # Read Meteora LP positions (Solana-specific, no chain column yet)
-    if os.path.exists(METEORA_LATEST_CSV):
+    if METEORA_LATEST_CSV.exists():
         try:
             meteora_df = pd.read_csv(METEORA_LATEST_CSV)
             for _, row in meteora_df.iterrows():
@@ -69,7 +66,7 @@ def calculate_lp_quantities():
         logger.warning(f"{METEORA_LATEST_CSV} not found.")
 
     # Read Krystal LP positions (uses Chain column)
-    if os.path.exists(KRYSTAL_LATEST_CSV):
+    if KRYSTAL_LATEST_CSV.exists():
         try:
             krystal_df = pd.read_csv(KRYSTAL_LATEST_CSV)
             for _, row in krystal_df.iterrows():
@@ -93,7 +90,6 @@ def calculate_lp_quantities():
     
     return lp_quantities
 
-# Rest of the code (check_hedge_rebalance and main) remains unchanged
 def check_hedge_rebalance():
     """Compare LP quantities with absolute hedge quantities and output results."""
     logger.info("Starting hedge-rebalancer...")
@@ -150,12 +146,11 @@ def check_hedge_rebalance():
         })
 
     if rebalance_results:
-        output_dir = data_dir
-        os.makedirs(output_dir, exist_ok=True)
-        os.makedirs(f"{output_dir}/rebalancing_history" , exist_ok=True)
+        output_dir = REBALANCING_HISTORY_DIR
+        output_dir.mkdir(parents=True, exist_ok=True)
         
-        history_filename = f"{output_dir}/rebalancing_history/rebalancing_results_{timestamp_for_filename}.csv"
-        latest_filename = f"{output_dir}/rebalancing_results.csv"
+        history_filename = output_dir / f"rebalancing_results_{timestamp_for_filename}.csv"
+        latest_filename = REBALANCING_LATEST_CSV
         
         headers = ["Timestamp", "Token", "LP Qty", "Hedged Qty", "Difference", 
                   "Percentage Diff", "Rebalance Action", "Rebalance Value"]

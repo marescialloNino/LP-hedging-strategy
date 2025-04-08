@@ -10,7 +10,9 @@ import sys
 import logging
 import uuid
 import atexit
-
+from common.path_config import (
+    REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV, METEORA_PNL_CSV
+)
 
 # Fix for Windows event loop issue
 if sys.platform == 'win32':
@@ -43,8 +45,8 @@ DATA_DIR = os.path.join(SCRIPT_DIR, "../lp-data")
 
 # CSV file paths (relative to DATA_DIR)
 REBALANCING_CSV = os.path.join(DATA_DIR, "rebalancing_results.csv")
-KRYSTAL_CSV = os.path.join(DATA_DIR, "LP_krystal_positions_latest.csv")
-METEORA_CSV = os.path.join(DATA_DIR, "LP_meteora_positions_latest.csv")
+KRYSTAL_LATEST_CSV = os.path.join(DATA_DIR, "LP_krystal_positions_latest.csv")
+METEORA_LATEST_CSV = os.path.join(DATA_DIR, "LP_meteora_positions_latest.csv")
 HEDGING_CSV = os.path.join(DATA_DIR, "hedging_positions_latest.csv")
 METEORA_PNL_CSV = os.path.join(DATA_DIR, "position_pnl_results.csv")
 
@@ -158,10 +160,10 @@ async def main():
     
     # Load CSVs with error handling
     csv_files = {
-        "Rebalancing": REBALANCING_CSV,
-        "Krystal": KRYSTAL_CSV,
-        "Meteora": METEORA_CSV,
-        "Hedging": HEDGING_CSV,
+        "Rebalancing": REBALANCING_LATEST_CSV,
+        "Krystal": KRYSTAL_LATEST_CSV,
+        "Meteora": METEORA_LATEST_CSV,
+        "Hedging": HEDGING_LATEST_CSV,
         "Meteora PnL": METEORA_PNL_CSV
     }
     dataframes = {}
