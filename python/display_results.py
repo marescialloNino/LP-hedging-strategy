@@ -39,8 +39,24 @@ logging.basicConfig(
     ]
 )
 
-# Set up BrokerHandler and BitgetOrderSender globally in dummy mode
+
+# Set up BrokerHandler and BitgetOrderSender globally in real mode
 params = {
+    'exchange_trade': 'bitget',
+    'account_trade': 'H1',
+    'send_orders': 'bitget'  
+}
+end_point = BrokerHandler.build_end_point('bitget', account='H1')
+bh = BrokerHandler(
+    market_watch='bitget',
+    strategy_param=params,
+    end_point_trade=end_point,
+    logger_name='bitget_order_sender'
+)
+order_sender = BitgetOrderSender(bh)
+
+# Set up BrokerHandler and BitgetOrderSender globally in dummy mode
+""" params = {
     'exchange_trade': 'bitget',
     'account_trade': 'H1',
     'send_orders': 'dummy'
@@ -52,7 +68,7 @@ bh = BrokerHandler(
     end_point_trade=end_point,
     logger_name='bitget_order_sender'
 )
-order_sender = BitgetOrderSender(bh)
+order_sender = BitgetOrderSender(bh) """
 
 async def execute_hedge_trade(token, rebalance_value):
     logger = logging.getLogger('hedge_execution')
