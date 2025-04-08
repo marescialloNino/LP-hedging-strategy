@@ -19,7 +19,7 @@ if sys.platform == 'win32':
 from .data_handler import BrokerHandler
 
 class BitgetOrderSender:
-    AMAZON_URL = f'http://{EXECUTION_IP}:/api'
+    AMAZON_URL = f'http://{EXECUTION_IP}:8080/api'
     AMAZON_UPI_SINGLE = AMAZON_URL + '/manualOrder/createOrUpdate'
     
     def __init__(self, broker_handler):
