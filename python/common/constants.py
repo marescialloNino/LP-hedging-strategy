@@ -5,7 +5,8 @@ HEDGABLE_TOKENS = {
 
     "ETHUSDT": {
         "polygon": ["0x7ceb23fd6bc0add59e62ac25578270cff1b9f619"],
-        "arbitrum": ["0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"]
+        "arbitrum": ["0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"],
+        "base": ["0x4200000000000000000000000000000000000006"]
     },
     "LINKUSDT": {
         "polygon": ["0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39"]
@@ -36,8 +37,13 @@ HEDGABLE_TOKENS = {
     "KILOUSDT": {
         "bsc" : ["0x503fa24b7972677f00c4618e5fbe237780c1df53"]
     },
+    "AIXBTUSDT": {
+        "base": ["0x4f9fd6be4a90f2620860d680c0d4d5fb53d1a825"]
+    },
+    "KAITOUSDT": {
+        "base": ["0x98d0baa52b2d063e780de12f615f963fe8537553"]
+    },
 
-    
     # Solana
     "SOLUSDT": {
         "solana": ["So11111111111111111111111111111111111111112"]
