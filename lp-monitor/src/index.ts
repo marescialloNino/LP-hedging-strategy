@@ -84,7 +84,7 @@ async function main() {
     const krystalRecords = await processEvmWallet(evmWallet);
     allKrystalRecords = allKrystalRecords.concat(krystalRecords);
   }
-
+  
   // Write all Krystal latest positions
   if (allKrystalRecords.length > 0) {
     await writeKrystalLatestCSV(allKrystalRecords);
@@ -94,9 +94,14 @@ async function main() {
   }
 
   // Write combined liquidity profile for all Meteora positions
+  let combinedMeteoraPositions: any[] = [];
   if (allMeteoraRecords.length > 0) {
-    const allMeteoraPositions = await retrieveMeteoraPositions(config.SOLANA_WALLET_ADDRESSES.join(',')); // Adjust if needed
-    await generateLiquidityProfileCSV('all_wallets', allMeteoraPositions);
+    
+    for (const solWallet of config.SOLANA_WALLET_ADDRESSES) {
+      const positions = await retrieveMeteoraPositions(solWallet);
+      combinedMeteoraPositions = combinedMeteoraPositions.concat(positions);
+    }
+    await generateLiquidityProfileCSV('all_wallets', combinedMeteoraPositions);
   } else {
     logger.info('No Meteora positions found across all wallets for liquidity profile');
   }
@@ -104,7 +109,12 @@ async function main() {
   // --- NEW: Calculate PnL for all Meteora positions and save to CSV ---
   if (allMeteoraRecords.length > 0) {
     // Retrieve full positions (including amounts, prices, symbols, etc.) for PnL calculation.
-    const pnlPositions = await retrieveMeteoraPositions(config.SOLANA_WALLET_ADDRESSES.join(','));
+    let pnlPositions: any[] = [];
+    for (const solWallet of config.SOLANA_WALLET_ADDRESSES) {
+      const walletPositions = await retrieveMeteoraPositions(solWallet);
+      pnlPositions = pnlPositions.concat(walletPositions);
+    }
+    logger.info(`Retrieved ${pnlPositions.length} Meteora positions for PnL calculation.`);
     if (pnlPositions.length > 0) {
       const pnlResults = await processPnlForPositions(pnlPositions);
       await savePnlResultsCsv(pnlResults);
