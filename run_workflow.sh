@@ -53,14 +53,14 @@ check_status "Conda environment activation"
 
 # Step 2: Run Bitget position fetcher (using stat39 env)
 log_message "Step 2: Running Bitget position fetcher..."
-cd "$BASE_DIR/hedge-monitoring"
-python3 bitget_position_fetcher.py >> "$LOG_FILE" 2>&1
+cd "$BASE_DIR/python"
+python3 -m hedge-monitoring.bitget_position_fetcher >> "$LOG_FILE" 2>&1
 check_status "Bitget position fetcher execution"
 
 # Step 3: Run hedge rebalancer (using stat39 env)
 log_message "Step 3: Running hedge rebalancer..."
-cd "$BASE_DIR/hedge-rebalancer"
-python3 hedge_rebalancer.py >> "$LOG_FILE" 2>&1
+cd "$BASE_DIR/python"
+python3 -m  hedge-rebalancer.hedge_rebalancer >> "$LOG_FILE" 2>&1
 check_status "Hedge rebalancer execution"
 
 # Deactivate Conda environment (optional)
