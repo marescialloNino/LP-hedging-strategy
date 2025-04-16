@@ -10,6 +10,7 @@ __pycache__/
 .ipynb
 # C extensions
 *.so
+*.sh
 
 # Distribution / packaging
 .Python
