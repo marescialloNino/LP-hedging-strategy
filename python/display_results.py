@@ -183,8 +183,8 @@ async def main():
     # Table 1: Wallet Positions (Krystal and Meteora)
     put_markdown("## Wallet Positions")
     wallet_headers = [
-        "Source", "Wallet", "Chain", "Protocol", "Pair", "Token X Qty", "Token Y Qty", "Current Price", "Min Price", "Max Price",
-        "In Range", "Fee APR", "Initial USD", "Present USD", "Pool Address"
+        "Source", "Wallet", "Chain", "Protocol", "Pair", "In Range", "Fee APR", "Initial USD", "Present USD",
+        "Token X Qty", "Token Y Qty", "Current Price", "Min Price", "Max Price", "Pool Address"
     ]
     wallet_data = []
 
@@ -200,15 +200,15 @@ async def main():
                 row["Chain"],
                 row["Protocol"],
                 pair_ticker,
+                "Yes" if row["Is In Range"] else "No",
+                f"{row['Fee APR']:.2%}" if pd.notna(row["Fee APR"]) else "N/A",
+                f"{row['Initial Value USD']:.2f}" if pd.notna(row["Initial Value USD"]) else "N/A",
+                f"{row['Actual Value USD']:.2f}" if pd.notna(row["Actual Value USD"]) else "N/A",
                 row["Token X Qty"],
                 row["Token Y Qty"],
                 f"{row['Current Price']:.6f}" if pd.notna(row["Current Price"]) else "N/A",
                 f"{row['Min Price']:.6f}" if pd.notna(row["Min Price"]) else "N/A",
                 f"{row['Max Price']:.6f}" if pd.notna(row["Max Price"]) else "N/A",
-                "Yes" if row["Is In Range"] else "No",
-                f"{row['Fee APR']:.2%}" if pd.notna(row["Fee APR"]) else "N/A",
-                f"{row['Initial Value USD']:.2f}" if pd.notna(row["Initial Value USD"]) else "N/A",
-                f"{row['Actual Value USD']:.2f}" if pd.notna(row["Actual Value USD"]) else "N/A",
                 row["Pool Address"]
             ])
 
@@ -227,15 +227,15 @@ async def main():
                 "Solana",
                 "Meteora",
                 pair_ticker,
+                "Yes" if row["Is In Range"] else "No",
+                "N/A",
+                "N/A",
+                f"{present_usd:.2f}",
                 row["Token X Qty"],
                 row["Token Y Qty"],
                 "N/A",
                 f"{row['Lower Boundary']:.6f}" if pd.notna(row["Lower Boundary"]) else "N/A",
                 f"{row['Upper Boundary']:.6f}" if pd.notna(row["Upper Boundary"]) else "N/A",
-                "Yes" if row["Is In Range"] else "No",
-                "N/A",
-                "N/A",
-                f"{present_usd:.2f}",
                 row["Pool Address"]
             ])
 
@@ -248,9 +248,8 @@ async def main():
     if "Meteora PnL" in dataframes:
         put_markdown("## Meteora Positions PnL")
         pnl_headers = [
-            "Timestamp", "Position ID", "Owner", "Pool Address", "Pair",
-            "Realized PNL (USD)", "Unrealized PNL (USD)", "Net PNL (USD)",
-            "Realized PNL (Token B)", "Unrealized PNL (Token B)", "Net PNL (Token B)"
+            "Timestamp", "Owner", "Pair", "Realized PNL (USD)", "Unrealized PNL (USD)", "Net PNL (USD)",
+            "Realized PNL (Token B)", "Unrealized PNL (Token B)", "Net PNL (Token B)", "Position ID", "Pool Address"
         ]
         pnl_data = []
         meteora_pnl_df = dataframes["Meteora PnL"]
@@ -258,16 +257,16 @@ async def main():
             pair = f"{row['Token X Symbol']}-{row['Token Y Symbol']}"
             pnl_data.append([
                 row["Timestamp"],
-                row["Position ID"],
                 truncate_wallet(row["Owner"]),
-                row["Pool Address"],
                 pair,
                 f"{row['Realized PNL (USD)']:.2f}",
                 f"{row['Unrealized PNL (USD)']:.2f}",
                 f"{row['Net PNL (USD)']:.2f}",
                 f"{row['Realized PNL (Token B)']:.2f}",
                 f"{row['Unrealized PNL (Token B)']:.2f}",
-                f"{row['Net PNL (Token B)']:.2f}"
+                f"{row['Net PNL (Token B)']:.2f}",
+                row["Position ID"],
+                row["Pool Address"]
             ])
         if pnl_data:
             put_table(pnl_data, header=pnl_headers)
@@ -306,7 +305,6 @@ async def main():
         def strip_usdt(token):
             return token.replace("USDT", "").strip() if isinstance(token, str) else token
 
-        
         hedge_processing = {}
 
         async def handle_hedge_click(token, rebalance_value):
@@ -348,25 +346,24 @@ async def main():
             
             if abs(rebalance_value) != 0.0:
                 button = put_buttons(
-                            [{'label': 'Hedge', 'value': token, 'color': 'primary'}],
-                            onclick=lambda t, rv=rebalance_value_with_sign: run_async(handle_hedge_click(t, rv))
-                        )
+                    [{'label': 'Hedge', 'value': token, 'color': 'primary'}],
+                    onclick=lambda t, rv=rebalance_value_with_sign: run_async(handle_hedge_click(t, rv))
+                )
             else:
                 button = put_text("No hedge needed")
             
             token_data.append([
                 token,
+                f"{lp_amount_usd:.2f}",
+                f"{hedge_amount:.4f}",
                 f"{lp_qty:.4f}",
                 f"{hedged_qty:.4f}",
-                f"{hedge_amount:.4f}",
-                f"{lp_amount_usd:.2f}",
                 rebalance_value_with_sign,
                 button
             ])
                 
         token_headers = [
-            "Token", "LP Qty", "Hedge Qty", "Hedge Amount USD", 
-            "LP Amount USD", "Suggested Hedge Qty", "Action"
+            "Token", "LP Amount USD", "Hedge Amount USD", "LP Qty", "Hedge Qty", "Suggested Hedge Qty", "Action"
         ]
         put_table(token_data, header=token_headers)
     elif "Hedging" in dataframes:
@@ -376,7 +373,9 @@ async def main():
             "quantity": "sum",
             "amount": "sum"
         }).reset_index().to_dict('records')
-        put_table(token_data, header=["Token", "Hedge Qty", "Hedge Amount USD"])
+        # Update this section if you want to align with the new column order
+        token_headers = ["Token", "Hedge Qty", "Hedge Amount USD"]
+        put_table(token_data, header=token_headers)
 
 # Ensure cleanup on exit
 def cleanup():
