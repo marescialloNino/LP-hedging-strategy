@@ -81,21 +81,28 @@ async def execute_hedge_trade(token, rebalance_value):
     logger.info(f"Sending order for ticker: {ticker} with order_size: {order_size} and direction: {direction}")
     
     try:
-        result, request = await order_sender.send_order(ticker, direction, order_size)
-        logger.info(f"Result from send_order: success={result}, request={request}")
-        
-        if result:
-            logger.info("Hedge order request built and sent successfully")
-            return {
-                'success': True,
-                'token': token,
-                'request': request
-            }
+        result = await order_sender.send_order(ticker, direction, order_size)
+        # Check if result is a tuple (expected case)
+        if isinstance(result, tuple) and len(result) == 2:
+            success, request = result
+            logger.info(f"Result from send_order: success={success}, request={request}")
+            
+            if success:
+                logger.info("Hedge order request built and sent successfully")
+                return {
+                    'success': True,
+                    'token': token,
+                    'request': request
+                }
+            else:
+                logger.error(f"Failed to send hedge order for {token}")
+                return {'success': False, 'token': token}
         else:
-            logger.error(f"Failed to send hedge order for {token}")
+            # Handle case where send_order returns False or other non-tuple
+            logger.error(f"Unexpected return value from send_order for {token}: {result}")
             return {'success': False, 'token': token}
     except Exception as e:
-        logger.error(f"Exception in send_order for {token}: {str(e)}", exc_info=True)
+        logger.error(f"Exception in execute_hedge_trade for {token}: {str(e)}", exc_info=True)
         return {'success': False, 'token': token}
 
 # Function to truncate wallet address
@@ -437,23 +444,28 @@ async def main():
             rebalance_value_with_sign = float(f"{'+' if action == 'buy' else '-'}{abs(rebalance_value):.6f}")
             
             # Create action buttons
-            action_buttons = []
+            hedge_button = None
+            close_button = None
             if abs(rebalance_value) != 0.0:
-                action_buttons.append({'label': 'Hedge', 'value': f"hedge_{token}", 'color': 'primary'})
-            if abs(hedged_qty) > 0:
-                action_buttons.append({'label': 'Close Hedge', 'value': f"close_{token}", 'color': 'danger'})
-            
-            if action_buttons:
-                button = put_buttons(
-                    action_buttons,
-                    onclick=lambda v: run_async(
-                        handle_hedge_click(token, rebalance_value_with_sign) if v.startswith("hedge_") else
-                        handle_close_hedge(token, hedged_qty)
-                    )
+                hedge_button = put_buttons(
+                    [{'label': 'Hedge', 'value': f"hedge_{token}", 'color': 'primary'}],
+                    onclick=lambda v, t=token, rv=rebalance_value_with_sign: run_async(handle_hedge_click(t, rv))
                 )
+            if abs(hedged_qty) > 0:
+                close_button = put_buttons(
+                    [{'label': 'Close', 'value': f"close_{token}", 'color': 'danger'}],
+                    onclick=lambda v, t=token, hq=hedged_qty: run_async(handle_close_hedge(t, hq))
+                )
+
+            if hedge_button or close_button:
+                button = put_row([
+                    hedge_button if hedge_button else put_text(""),  # Empty placeholder if no Hedge button
+                    put_text(" "),  # Small spacer between buttons
+                    close_button if close_button else put_text("")   # Empty placeholder if no Close button
+                ], size='auto 5px auto')  # Adjust spacing as needed
             else:
                 button = put_text("No action needed")
-            
+
             token_data.append([
                 token,
                 f"{lp_amount_usd:.2f}",
@@ -572,16 +584,16 @@ async def main():
             
             action_buttons = []
             if abs(hedged_qty) > 0:
-                action_buttons.append({'label': 'Close Hedge', 'value': f"close_{token}", 'color': 'danger'})
-            
+                action_buttons.append({'label': 'Close', 'value': f"close_{token}", 'color': 'danger'})
+
             if action_buttons:
                 button = put_buttons(
                     action_buttons,
-                    onclick=lambda v: run_async(handle_close_hedge(token, hedged_qty))
+                    onclick=lambda v, t=token, hq=hedged_qty: run_async(handle_close_hedge(t, hq))
                 )
             else:
                 button = put_text("No action needed")
-            
+
             token_data.append([
                 token,
                 f"{hedge_amount:.4f}",
