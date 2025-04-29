@@ -342,7 +342,15 @@ async def main():
             action = row["Rebalance Action"].strip().lower()  
             
             lp_amount_usd = calculate_token_usd_value(token, krystal_df, meteora_df)
-            rebalance_value_with_sign = float(f"{'+' if action == 'buy' else '-'}{abs(rebalance_value):.6f}")
+            # Determine the sign based on whether we're closing a position
+            if action == 'close':
+                # Use opposite sign of hedge amount for closing positions
+                sign = '-' if hedge_amount > 0 else '+'
+            else:
+                # For non-close actions, use the action to determine sign
+                sign = '+' if action == 'buy' else '-'
+            
+            rebalance_value_with_sign = float(f"{sign}{abs(rebalance_value):.6f}")
             
             if abs(rebalance_value) != 0.0:
                 button = put_buttons(
