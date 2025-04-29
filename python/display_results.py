@@ -276,6 +276,12 @@ async def main():
     # Table 3: Token Hedge Summary (Rebalancing + Hedging)
     if "Rebalancing" in dataframes:
         put_markdown("## Token Hedge Summary")
+        # Add "Close All Hedges" button
+        put_buttons(
+            [{'label': 'Close All Hedges', 'value': 'all', 'color': 'danger'}],
+            onclick=lambda _: run_async(handle_close_all_hedges())
+        )
+
         rebalancing_df = dataframes["Rebalancing"]
         
         token_agg = rebalancing_df.groupby("Token").agg({
@@ -317,9 +323,8 @@ async def main():
 
             hedge_processing[token] = True
             try:
-                # Explicitly create a task to ensure it runs
                 task = asyncio.create_task(execute_hedge_trade(token, rebalance_value))
-                result = await task  # Wait for the task to complete
+                result = await task
                 
                 if result['success']:
                     put_markdown(f"### Hedge Order Request for {result['token']}")
@@ -331,34 +336,123 @@ async def main():
                 logger.error(f"Exception in handle_hedge_click for {token}: {str(e)}", exc_info=True)
                 toast(f"Error processing hedge for {token}", duration=5, color="error")
             finally:
-                hedge_processing[token] = False          
+                hedge_processing[token] = False
+
+        async def handle_close_hedge(token, hedged_qty):
+            logger = logging.getLogger('hedge_execution')
+            logger.info(f"Handling close hedge for {token} with hedged_qty {hedged_qty}")
+            
+            if hedge_processing.get(token, False):
+                toast(f"Close hedge already in progress for {token}", duration=5, color="warning")
+                return
+
+            hedge_processing[token] = True
+            try:
+                # To close the hedge, send an order with the opposite quantity
+                close_qty = -hedged_qty  # Opposite of current hedge to bring to zero
+                task = asyncio.create_task(execute_hedge_trade(token, close_qty))
+                result = await task
+                
+                if result['success']:
+                    put_markdown(f"### Close Hedge Order Request for {result['token']}")
+                    put_code(json.dumps(result['request'], indent=2), language='json')
+                    toast(f"Close hedge triggered for {result['token']}", duration=5, color="success")
+                    # Update Hedging CSV
+                    if "Hedging" in dataframes:
+                        hedging_df = dataframes["Hedging"]
+                        ticker = f"{token}USDT"
+                        hedging_df.loc[hedging_df["symbol"] == ticker, "quantity"] = 0
+                        hedging_df.loc[hedging_df["symbol"] == ticker, "amount"] = 0
+                        hedging_df.to_csv(HEDGING_LATEST_CSV, index=False)
+                        logger.info(f"Updated {HEDGING_LATEST_CSV} for {ticker}")
+                else:
+                    toast(f"Failed to close hedge for {result['token']}", duration=5, color="error")
+            except Exception as e:
+                logger.error(f"Exception in handle_close_hedge for {token}: {str(e)}", exc_info=True)
+                toast(f"Error processing close hedge for {token}", duration=5, color="error")
+            finally:
+                hedge_processing[token] = False
+
+        async def handle_close_all_hedges():
+            logger = logging.getLogger('hedge_execution')
+            logger.info("Handling close all hedges")
+            
+            if any(hedge_processing.values()):
+                toast("Hedge or close operation in progress, please wait", duration=5, color="warning")
+                return
+
+            if token_summary.empty or token_summary["quantity"].eq(0).all():
+                toast("No hedge positions to close", duration=5, color="info")
+                return
+
+            results = []
+            for _, row in token_summary.iterrows():
+                token = strip_usdt(row["Token"])
+                hedged_qty = row["quantity"]
+                if hedged_qty != 0:
+                    hedge_processing[token] = True
+                    try:
+                        # To close the hedge, send an order with the opposite quantity
+                        close_qty = -hedged_qty
+                        task = asyncio.create_task(execute_hedge_trade(token, close_qty))
+                        result = await task
+                        if result['success']:
+                            # Update Hedging CSV
+                            if "Hedging" in dataframes:
+                                hedging_df = dataframes["Hedging"]
+                                ticker = f"{token}USDT"
+                                hedging_df.loc[hedging_df["symbol"] == ticker, "quantity"] = 0
+                                hedging_df.loc[hedging_df["symbol"] == ticker, "amount"] = 0
+                                hedging_df.to_csv(HEDGING_LATEST_CSV, index=False)
+                                logger.info(f"Updated {HEDGING_LATEST_CSV} for {ticker}")
+                        results.append(result)
+                    except Exception as e:
+                        logger.error(f"Exception closing hedge for {token}: {str(e)}", exc_info=True)
+                        results.append({'success': False, 'token': token})
+                    finally:
+                        hedge_processing[token] = False
+
+            success_count = sum(1 for r in results if r['success'])
+            if success_count == len(results) and results:
+                toast("All hedge positions closed successfully", duration=5, color="success")
+            elif results:
+                toast(f"Closed {success_count}/{len(results)} hedge positions", duration=5, color="error")
+            else:
+                toast("No hedge positions were processed", duration=5, color="info")
+                
+            for result in results:
+                if result['success']:
+                    put_markdown(f"### Close Hedge Order Request for {result['token']}")
+                    put_code(json.dumps(result['request'], indent=2), language='json')
 
         for _, row in token_summary.iterrows():
             token = strip_usdt(row["Token"])
             lp_qty = row["LP Qty"]
-            hedged_qty = row["Hedged Qty"]
+            hedged_qty = row["quantity"]  # Use quantity from Hedging CSV
             rebalance_value = row["Rebalance Value"]
             hedge_amount = row["amount"]
             action = row["Rebalance Action"].strip().lower()  
             
             lp_amount_usd = calculate_token_usd_value(token, krystal_df, meteora_df)
-            # Determine the sign based on whether we're closing a position
-            if action == 'close':
-                # Use opposite sign of hedge amount for closing positions
-                sign = '-' if hedge_amount > 0 else '+'
-            else:
-                # For non-close actions, use the action to determine sign
-                sign = '+' if action == 'buy' else '-'
+            rebalance_value_with_sign = float(f"{'+' if action == 'buy' else '-'}{abs(rebalance_value):.6f}")
             
-            rebalance_value_with_sign = float(f"{sign}{abs(rebalance_value):.6f}")
-            
+            # Create action buttons
+            action_buttons = []
             if abs(rebalance_value) != 0.0:
+                action_buttons.append({'label': 'Hedge', 'value': f"hedge_{token}", 'color': 'primary'})
+            if abs(hedged_qty) > 0:
+                action_buttons.append({'label': 'Close Hedge', 'value': f"close_{token}", 'color': 'danger'})
+            
+            if action_buttons:
                 button = put_buttons(
-                    [{'label': 'Hedge', 'value': token, 'color': 'primary'}],
-                    onclick=lambda t, rv=rebalance_value_with_sign: run_async(handle_hedge_click(t, rv))
+                    action_buttons,
+                    onclick=lambda v: run_async(
+                        handle_hedge_click(token, rebalance_value_with_sign) if v.startswith("hedge_") else
+                        handle_close_hedge(token, hedged_qty)
+                    )
                 )
             else:
-                button = put_text("No hedge needed")
+                button = put_text("No action needed")
             
             token_data.append([
                 token,
@@ -376,13 +470,126 @@ async def main():
         put_table(token_data, header=token_headers)
     elif "Hedging" in dataframes:
         put_markdown("## Token Hedge Summary (Hedging Only)")
+        # Add "Close All Hedges" button
+        put_buttons(
+            [{'label': 'Close All Hedges', 'value': 'all', 'color': 'danger'}],
+            onclick=lambda _: run_async(handle_close_all_hedges())
+        )
         hedging_df = dataframes["Hedging"]
-        token_data = hedging_df.groupby("symbol").agg({
+        token_data = []
+        hedging_agg = hedging_df.groupby("symbol").agg({
             "quantity": "sum",
             "amount": "sum"
-        }).reset_index().to_dict('records')
-        # Update this section if you want to align with the new column order
-        token_headers = ["Token", "Hedge Qty", "Hedge Amount USD"]
+        }).reset_index()
+
+        async def handle_close_hedge(token, hedged_qty):
+            logger = logging.getLogger('hedge_execution')
+            logger.info(f"Handling close hedge for {token} with hedged_qty {hedged_qty}")
+            
+            if hedge_processing.get(token, False):
+                toast(f"Close hedge already in progress for {token}", duration=5, color="warning")
+                return
+
+            hedge_processing[token] = True
+            try:
+                close_qty = -hedged_qty
+                task = asyncio.create_task(execute_hedge_trade(token, close_qty))
+                result = await task
+                
+                if result['success']:
+                    put_markdown(f"### Close Hedge Order Request for {result['token']}")
+                    put_code(json.dumps(result['request'], indent=2), language='json')
+                    toast(f"Close hedge triggered for {result['token']}", duration=5, color="success")
+                    # Update Hedging CSV
+                    hedging_df = dataframes["Hedging"]
+                    ticker = f"{token}USDT"
+                    hedging_df.loc[hedging_df["symbol"] == ticker, "quantity"] = 0
+                    hedging_df.loc[hedging_df["symbol"] == ticker, "amount"] = 0
+                    hedging_df.to_csv(HEDGING_LATEST_CSV, index=False)
+                    logger.info(f"Updated {HEDGING_LATEST_CSV} for {ticker}")
+                else:
+                    toast(f"Failed to close hedge for {result['token']}", duration=5, color="error")
+            except Exception as e:
+                logger.error(f"Exception in handle_close_hedge for {token}: {str(e)}", exc_info=True)
+                toast(f"Error processing close hedge for {token}", duration=5, color="error")
+            finally:
+                hedge_processing[token] = False
+
+        async def handle_close_all_hedges():
+            logger = logging.getLogger('hedge_execution')
+            logger.info("Handling close all hedges")
+            
+            if any(hedge_processing.values()):
+                toast("Hedge or close operation in progress, please wait", duration=5, color="warning")
+                return
+
+            if hedging_agg.empty or hedging_agg["quantity"].eq(0).all():
+                toast("No hedge positions to close", duration=5, color="info")
+                return
+
+            results = []
+            for _, row in hedging_agg.iterrows():
+                token = strip_usdt(row["symbol"])
+                hedged_qty = row["quantity"]
+                if hedged_qty != 0:
+                    hedge_processing[token] = True
+                    try:
+                        close_qty = -hedged_qty
+                        task = asyncio.create_task(execute_hedge_trade(token, close_qty))
+                        result = await task
+                        if result['success']:
+                            # Update Hedging CSV
+                            hedging_df = dataframes["Hedging"]
+                            ticker = f"{token}USDT"
+                            hedging_df.loc[hedging_df["symbol"] == ticker, "quantity"] = 0
+                            hedging_df.loc[hedging_df["symbol"] == ticker, "amount"] = 0
+                            hedging_df.to_csv(HEDGING_LATEST_CSV, index=False)
+                            logger.info(f"Updated {HEDGING_LATEST_CSV} for {ticker}")
+                        results.append(result)
+                    except Exception as e:
+                        logger.error(f"Exception closing hedge for {token}: {str(e)}", exc_info=True)
+                        results.append({'success': False, 'token': token})
+                    finally:
+                        hedge_processing[token] = False
+
+            success_count = sum(1 for r in results if r['success'])
+            if success_count == len(results) and results:
+                toast("All hedge positions closed successfully", duration=5, color="success")
+            elif results:
+                toast(f"Closed {success_count}/{len(results)} hedge positions", duration=5, color="error")
+            else:
+                toast("No hedge positions were processed", duration=5, color="info")
+                
+            for result in results:
+                if result['success']:
+                    put_markdown(f"### Close Hedge Order Request for {result['token']}")
+                    put_code(json.dumps(result['request'], indent=2), language='json')
+
+        for _, row in hedging_agg.iterrows():
+            token = strip_usdt(row["symbol"])
+            hedged_qty = row["quantity"]
+            hedge_amount = row["amount"]
+            
+            action_buttons = []
+            if abs(hedged_qty) > 0:
+                action_buttons.append({'label': 'Close Hedge', 'value': f"close_{token}", 'color': 'danger'})
+            
+            if action_buttons:
+                button = put_buttons(
+                    action_buttons,
+                    onclick=lambda v: run_async(handle_close_hedge(token, hedged_qty))
+                )
+            else:
+                button = put_text("No action needed")
+            
+            token_data.append([
+                token,
+                f"{hedge_amount:.4f}",
+                f"{hedged_qty:.4f}",
+                button
+            ])
+
+        token_headers = ["Token", "Hedge Amount USD", "Hedge Qty", "Action"]
         put_table(token_data, header=token_headers)
 
 # Ensure cleanup on exit
