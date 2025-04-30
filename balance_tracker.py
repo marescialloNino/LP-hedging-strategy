@@ -1,6 +1,5 @@
 import os
 import requests
-import json
 import asyncio
 import dotenv
 
@@ -35,9 +34,19 @@ async def main():
     with requests.Session() as session:
         positions = await position_fetcher(session, addresses, chains)
     statsByChain = positions.get('statsByChain', {})
-    for chain, stats in statsByChain.items():
-        print(f"Chain: {chain}")
-        print(f"Stats: {stats}")
+    all_stats = statsByChain.get('all', {})
+    headers = ['currentPositionValue', 'totalDepositValue', 'totalWithdrawValue', 'totalFeeEarned', 'feeEarned24h', 'totalGasUsed']
+    values = [all_stats.get(key, 0) for key in headers]
+    filename = "balance_tracker.csv"
+    if not os.path.exists(filename):
+        with open(filename, 'w') as f:
+            f.write(','.join(headers) + '\n')
+            f.write(','.join(f'{values}:.3f') + '\n')
+    else:
+        with open(filename, 'a') as f:
+            f.write(','.join(f'{values}:.3f') + '\n')
+
+
 
 
 
