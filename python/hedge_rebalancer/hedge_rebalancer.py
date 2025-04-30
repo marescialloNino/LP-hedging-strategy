@@ -130,9 +130,10 @@ def check_hedge_rebalance():
                 rebalance_value = abs_difference
                 logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} ***")
         elif lp_qty == 0 and hedge_qty != 0:
-            rebalance_action = "close"
+            # Set action based on hedge_qty sign to close the position
+            rebalance_action = "buy" if hedge_qty < 0 else "sell"
             rebalance_value = abs_hedge_qty
-            logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} for {symbol} (no LP exposure) ***")
+            logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} (no LP exposure) ***")
 
         rebalance_results.append({
             "Timestamp": timestamp_for_csv,
