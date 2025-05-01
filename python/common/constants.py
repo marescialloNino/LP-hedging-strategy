@@ -52,6 +52,15 @@ HEDGABLE_TOKENS = {
     "PEPEUSDT": {
         "bsc": ["0x25d887ce7a35172c62febfd67a1856f20faebb00"]
     },
+    "VVVUSDT": {
+        "base": ["0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf"]
+    },
+    "TOSHIUSDT": {
+        "base": ["0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4"]
+    },
+    "VVVUSDT": {
+        "base": ["0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf"]
+    },
 
     # Solana
     "SOLUSDT": {
