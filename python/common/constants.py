@@ -43,6 +43,15 @@ HEDGABLE_TOKENS = {
     "KAITOUSDT": {
         "base": ["0x98d0baa52b2d063e780de12f615f963fe8537553"]
     },
+    "VIRTUALUSDT": {
+        "base": ["0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b"]
+    },
+    "BROCCOLIF3BUSDT": {
+        "bsc": ["0x12b4356c65340fb02cdff01293f95febb1512f3b"]
+    },
+    "PEPEUSDT": {
+        "bsc": ["0x25d887ce7a35172c62febfd67a1856f20faebb00"]
+    },
 
     # Solana
     "SOLUSDT": {
@@ -60,6 +69,7 @@ HEDGABLE_TOKENS = {
     "AI16ZUSDT": {
         "solana": ["HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC"]
     },
+
 }
 
 # File paths (relative to lp-monitor output)
