@@ -88,7 +88,7 @@ class BitgetOrderSender:
         print("DEBUG: Before detailed output", flush=True)
 
         child_order_delay = 1000 * np.random.uniform(0.2, 1)
-        max_alive_order_time = 1000 * np.random.uniform(10, 20)
+        max_alive_order_time = 1000 * np.random.uniform(5, 8)
         
         if price is None:
             max_order_size = qty
@@ -119,7 +119,9 @@ class BitgetOrderSender:
             'type': 'LIMIT_WITH_LEEWAY',
             'maxStratTime': 30 * 60 * 1000,
             'timeInForce': 'GTC',
-            'marginMode': 'isolated'
+            'clientRef': 'hedge automation',
+            'maxRetryAsLimitOrder': 10,
+            'marginMode': 'ISOLATED'
         }
         
         request = {
@@ -127,7 +129,7 @@ class BitgetOrderSender:
             'orderMsg': 0,
             'manualOrderConfiguration': config
         }
-        
+
         # Print statements NOW, after all variables are defined
         print("\n=== Sending Order ===", flush=True)
         print(f"Ticker: {ticker}", flush=True)
