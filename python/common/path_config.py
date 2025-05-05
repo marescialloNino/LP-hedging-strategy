@@ -17,6 +17,7 @@ REBALANCING_LATEST_CSV = DATA_DIR / "rebalancing_results.csv"
 METEORA_LATEST_CSV = DATA_DIR / "LP_meteora_positions_latest.csv"
 KRYSTAL_LATEST_CSV = DATA_DIR / "LP_krystal_positions_latest.csv"
 METEORA_PNL_CSV = DATA_DIR / "position_pnl_results.csv"
+KRYSTAL_POOL_PNL_CSV = DATA_DIR /"krystal_pnl_by_pool.csv"
 
 # Ensure subdirectories exist
 REBALANCING_HISTORY_DIR.mkdir(parents=True, exist_ok=True)

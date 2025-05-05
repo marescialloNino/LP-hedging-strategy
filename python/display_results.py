@@ -11,7 +11,7 @@ import logging
 import uuid
 import atexit
 from common.path_config import (
-    REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV, METEORA_PNL_CSV
+    REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV, METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV
 )
 
 # Fix for Windows event loop issue
@@ -178,7 +178,8 @@ async def main():
         "Krystal": KRYSTAL_LATEST_CSV,
         "Meteora": METEORA_LATEST_CSV,
         "Hedging": HEDGING_LATEST_CSV,
-        "Meteora PnL": METEORA_PNL_CSV
+        "Meteora PnL": METEORA_PNL_CSV,
+        "Krystal PnL": KRYSTAL_POOL_PNL_CSV,          
     }
     dataframes = {}
     for name, path in csv_files.items():
@@ -279,6 +280,25 @@ async def main():
             put_table(pnl_data, header=pnl_headers)
         else:
             put_text("No PnL data found in Meteora PnL CSV.")
+
+    # Table: Krystal PnL by Pool (only pools with open positions)
+    if "Krystal PnL" in dataframes:
+        put_markdown("## Krystal Positions PnL by Pool (Open Pools)")
+        k_pnl_df = dataframes["Krystal PnL"]
+
+        pnl_headers = ["Chain", "Pool Address", "Pair", "PnL (USD)", "PnL (Token B)"]
+        pnl_rows = []
+        for _, r in k_pnl_df.iterrows():
+            pair = f"{r['tokenA_symbol']}-{r['tokenB_symbol']}"
+            pnl_rows.append([
+                r["chainName"],
+                r["poolAddress"],
+                pair,
+                f"{r['pnl_usd']:.2f}",
+                f"{r['pnl_tokenB']:.6f}",
+            ])
+
+        put_table(pnl_rows, header=pnl_headers)
 
     # Table 3: Token Hedge Summary (Rebalancing + Hedging)
     if "Rebalancing" in dataframes:

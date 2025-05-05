@@ -61,6 +61,13 @@ LP Hedging Strategy is a multi-part project designed to monitor liquidity pool (
         ```bash
         python -m hedge_rebalancer.hedge_rebalancer
 
+    2c. **run krystal_pnl workflow **
+        ```bash
+        python -m krystal_pnl.balance_tracker
+        python -m krystal_pnl.bitget_markets
+        python -m krystal_pnl.price_downloader
+        python -m krystal_pnl.v3_pnl_calculator
+
 3. **run simple visualization webapp:**
     ```bash
     python -m display_results
