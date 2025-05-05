@@ -58,9 +58,6 @@ HEDGABLE_TOKENS = {
     "TOSHIUSDT": {
         "base": ["0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4"]
     },
-    "VVVUSDT": {
-        "base": ["0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf"]
-    },
 
     # Solana
     "SOLUSDT": {
@@ -78,7 +75,9 @@ HEDGABLE_TOKENS = {
     "AI16ZUSDT": {
         "solana": ["HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC"]
     },
-
+    "HOUSEUSDT": {
+        "solana": ["DitHyRMQiSDhn5cnKMJV2CDDt6sVct96YrECiM49pump"]
+    }
 }
 
 # File paths (relative to lp-monitor output)
