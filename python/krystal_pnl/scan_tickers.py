@@ -22,7 +22,8 @@ CUSTOM_OVERRIDES = SYMBOL_MAP
 
 def default_symbol_mapper(token_symbol: str, base: str = "USDT") -> str:
     sym = token_symbol.upper()
-    return CUSTOM_OVERRIDES.get(sym, f"{sym}{base}")
+    sym = CUSTOM_OVERRIDES.get(sym, sym)
+    return f"{sym}{base}"
 
 
 # --------------------------------------------------------------------------- #
@@ -89,3 +90,14 @@ def build_ticker_timewindows(
 
     return result
 
+
+if __name__ == "__main__":
+    # 1) Build desired windows from position files
+    raw_windows = build_ticker_timewindows(
+        closed_csv="pnl_data/krystal_closed_positions.csv",
+        open_csv="pnl_data/krystal_open_positions.csv",
+    )
+
+    print(raw_windows)
+
+   
