@@ -39,7 +39,6 @@ logging.basicConfig(
     ]
 )
 
-
 # Set up BrokerHandler and BitgetOrderSender globally in real mode
 params = {
     'exchange_trade': 'bitget',
@@ -108,8 +107,6 @@ async def execute_hedge_trade(token, rebalance_value):
 # Function to truncate wallet address
 def truncate_wallet(wallet):
     return f"{wallet[:5]}..." if isinstance(wallet, str) and len(wallet) > 5 else wallet
-
-
 
 def calculate_token_usd_value(token, krystal_df=None, meteora_df=None):
     """
@@ -198,7 +195,7 @@ async def main():
 
     if "Krystal" in dataframes:
         krystal_df = dataframes["Krystal"]
-        ticker_source = "symbol" if "Token X Symbol" in krystal_df.columns and "Token Y Symbol" in krystal_df.columns else "address"
+        ticker_source = "symbol" if "Token X Symbol" in krystal_df.columns and "Token X Symbol" in krystal_df.columns else "address"
         for _, row in krystal_df.iterrows():
             pair_ticker = (f"{row['Token X Symbol']}-{row['Token Y Symbol']}" if ticker_source == "symbol" 
                           else f"{row['Token X Address'][:5]}...-{row['Token Y Address'][:5]}...")
@@ -320,7 +317,7 @@ async def main():
         put_markdown("## Token Hedge Summary")
         # Add "Close All Hedges" button
         put_buttons(
-            [{'label': 'Close All Hedges', 'value': 'all', 'color': 'danger'}],
+            [{'label': 'Degen Mode 🦍', 'value': 'all', 'color': 'danger'}],
             onclick=lambda _: run_async(handle_close_all_hedges())
         )
 
@@ -337,15 +334,18 @@ async def main():
             hedging_df = dataframes["Hedging"]
             hedging_agg = hedging_df.groupby("symbol").agg({
                 "quantity": "sum",
-                "amount": "sum"
+                "amount": "sum",
+                "funding_rate": "mean"  # Use mean for funding_rate if multiple entries exist
             }).reset_index().rename(columns={"symbol": "Token"})
             token_summary = pd.merge(token_agg, hedging_agg, on="Token", how="left")
             token_summary["quantity"] = token_summary["quantity"].fillna(0)
             token_summary["amount"] = token_summary["amount"].fillna(0)
+            token_summary["funding_rate"] = token_summary["funding_rate"].fillna(0)
         else:
             token_summary = token_agg
             token_summary["quantity"] = 0
             token_summary["amount"] = 0
+            token_summary["funding_rate"] = 0
 
         token_data = []
         krystal_df = dataframes.get("Krystal")
@@ -405,6 +405,7 @@ async def main():
                         ticker = f"{token}USDT"
                         hedging_df.loc[hedging_df["symbol"] == ticker, "quantity"] = 0
                         hedging_df.loc[hedging_df["symbol"] == ticker, "amount"] = 0
+                        hedging_df.loc[hedging_df["symbol"] == ticker, "funding_rate"] = 0
                         hedging_df.to_csv(HEDGING_LATEST_CSV, index=False)
                         logger.info(f"Updated {HEDGING_LATEST_CSV} for {ticker}")
                 else:
@@ -445,6 +446,7 @@ async def main():
                                 ticker = f"{token}USDT"
                                 hedging_df.loc[hedging_df["symbol"] == ticker, "quantity"] = 0
                                 hedging_df.loc[hedging_df["symbol"] == ticker, "amount"] = 0
+                                hedging_df.loc[hedging_df["symbol"] == ticker, "funding_rate"] = 0
                                 hedging_df.to_csv(HEDGING_LATEST_CSV, index=False)
                                 logger.info(f"Updated {HEDGING_LATEST_CSV} for {ticker}")
                         results.append(result)
@@ -473,6 +475,7 @@ async def main():
             hedged_qty = row["quantity"]  # Use quantity from Hedging CSV
             rebalance_value = row["Rebalance Value"]
             hedge_amount = row["amount"]
+            funding_rate = row["funding_rate"]
             action = row["Rebalance Action"].strip().lower()  
             
             lp_amount_usd = calculate_token_usd_value(token, krystal_df, meteora_df)
@@ -508,11 +511,12 @@ async def main():
                 f"{lp_qty:.4f}",
                 f"{hedged_qty:.4f}",
                 rebalance_value_with_sign,
-                button
+                button,
+                f"{funding_rate:.6f}" if pd.notna(funding_rate) else "N/A"
             ])
                 
         token_headers = [
-            "Token", "LP Amount USD", "Hedge Amount USD", "LP Qty", "Hedge Qty", "Suggested Hedge Qty", "Action"
+            "Token", "LP Amount USD", "Hedge Amount USD", "LP Qty", "Hedge Qty", "Suggested Hedge Qty", "Action", "Funding Rate"
         ]
         put_table(token_data, header=token_headers)
     elif "Hedging" in dataframes:
@@ -526,7 +530,8 @@ async def main():
         token_data = []
         hedging_agg = hedging_df.groupby("symbol").agg({
             "quantity": "sum",
-            "amount": "sum"
+            "amount": "sum",
+            "funding_rate": "mean"
         }).reset_index()
 
         async def handle_close_hedge(token, hedged_qty):
@@ -552,6 +557,7 @@ async def main():
                     ticker = f"{token}USDT"
                     hedging_df.loc[hedging_df["symbol"] == ticker, "quantity"] = 0
                     hedging_df.loc[hedging_df["symbol"] == ticker, "amount"] = 0
+                    hedging_df.loc[hedging_df["symbol"] == ticker, "funding_rate"] = 0
                     hedging_df.to_csv(HEDGING_LATEST_CSV, index=False)
                     logger.info(f"Updated {HEDGING_LATEST_CSV} for {ticker}")
                 else:
@@ -590,6 +596,7 @@ async def main():
                             ticker = f"{token}USDT"
                             hedging_df.loc[hedging_df["symbol"] == ticker, "quantity"] = 0
                             hedging_df.loc[hedging_df["symbol"] == ticker, "amount"] = 0
+                            hedging_df.loc[hedging_df["symbol"] == ticker, "funding_rate"] = 0
                             hedging_df.to_csv(HEDGING_LATEST_CSV, index=False)
                             logger.info(f"Updated {HEDGING_LATEST_CSV} for {ticker}")
                         results.append(result)
@@ -616,6 +623,7 @@ async def main():
             token = strip_usdt(row["symbol"])
             hedged_qty = row["quantity"]
             hedge_amount = row["amount"]
+            funding_rate = row["funding_rate"]
             
             action_buttons = []
             if abs(hedged_qty) > 0:
@@ -633,10 +641,11 @@ async def main():
                 token,
                 f"{hedge_amount:.4f}",
                 f"{hedged_qty:.4f}",
-                button
+                button,
+                f"{funding_rate:.6f}" if pd.notna(funding_rate) else "N/A"
             ])
 
-        token_headers = ["Token", "Hedge Amount USD", "Hedge Qty", "Action"]
+        token_headers = ["Token", "Hedge Amount USD", "Hedge Qty", "Action", "Funding Rate"]
         put_table(token_data, header=token_headers)
 
 # Ensure cleanup on exit

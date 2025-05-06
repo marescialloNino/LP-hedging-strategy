@@ -8,6 +8,7 @@ from abc import abstractmethod, ABC
 from .downsample import create_bars
 from . import df_constants as constants
 from ccxt.base.errors import BadSymbol
+import asyncio
 
 
 class MotherFeeder(ABC):
@@ -64,8 +65,7 @@ class MotherFeeder(ABC):
         if type(start_time) is float or type(start_time) is int:
             init_time = start_time + 1
         else:
-            start_time = start_time.timestamp()
-            init_time = start_time + 1
+            init_time = start_time.timestamp() + 1
 
         while init_time < (time.time() if end_time is None else end_time):
             retry = 5
@@ -141,8 +141,7 @@ class MotherFeeder(ABC):
         if type(start_time) is float or type(start_time) is int:
             init_time = start_time + 1
         else:
-            start_time = start_time.timestamp()
-            init_time = start_time + 1
+            init_time = start_time.timestamp() + 1
 
         while init_time < (time.time() if end_time is None else end_time):
             retry = 5
@@ -184,26 +183,26 @@ class MotherFeeder(ABC):
 
         return bars, bar_complete
 
-    def read_funding(self, symbol, timeframe, start_time, end_time=None):
+    async def read_funding(self, symbol, timeframe=None, start_time=None, end_time=None):
         """
-        Reads funding since last data point and aggregate to timeframe
-        :param symbol:
-        :type symbol: str
-        :param timeframe: timestep for data
-        :type symbol:
+        Reads the current funding rate for a symbol
+        :param symbol: str, unified market symbol
+        :param timeframe: str, ignored (kept for compatibility)
+        :param start_time: float or int, ignored (kept for compatibility)
+        :param end_time: float or int, ignored (kept for compatibility)
+        :return: dict, funding rate data or None if no data
         """
-
-        if timeframe not in constants.TIMEFRAMES:
-            timeframe = '1h'
-
-        if type(start_time) is float or type(start_time) is int:
-            init_time = start_time + 1
-        else:
-            init_time = datetime.timestamp(start_time) + 1
-        read_timeframe = list(constants.TIMEFRAMES)[0]
-        funding = self._exchange.fetch_funding(symbol, read_timeframe, since=int(init_time * 1000),
-                                               limit=self._get_limit())
-        return funding
+        try:
+            # Run synchronous fetch_funding_rate in an executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            funding = await loop.run_in_executor(
+                None,
+                lambda: self._exchange.fetch_funding_rate(symbol)
+            )
+            return funding if funding else None
+        except Exception as e:
+            print(f"Error fetching funding rate for {symbol}: {str(e)}")
+            return None
 
     def market_info(self, symbol):
         try:
@@ -248,7 +247,6 @@ class MotherFeeder(ABC):
 
     async def get_positions_async(self, tickers=None):
         '''
-
         :param tickers:
         :return: List[float, float, float, timestamp]: qty, amount, entry_price, entry_ts
         '''
