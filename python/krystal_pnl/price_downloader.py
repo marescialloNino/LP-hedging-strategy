@@ -195,7 +195,7 @@ def fetch_bitget_open_prices(
     price_matrix.to_csv(OUTFILE, index_label="timestamp")
     save_coverage(coverage)
 
-    print(f"✅  Saved updated prices → {os.path.abspath(OUTFILE)}")
+    print(f"Saved updated prices → {os.path.abspath(OUTFILE)}")
     return price_matrix
 
 

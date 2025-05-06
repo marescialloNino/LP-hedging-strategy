@@ -1,4 +1,5 @@
 # constants.py
+from typing import Dict
 
 HEDGABLE_TOKENS = {
     # EVM
@@ -79,6 +80,18 @@ HEDGABLE_TOKENS = {
         "solana": ["DitHyRMQiSDhn5cnKMJV2CDDt6sVct96YrECiM49pump"]
     }
 }
+
+# map between onchain and bitget tickers 
+SYMBOL_MAP: Dict[str, str] = {
+    "WPOL": "POL",
+    "WETH": "ETH", 
+    "WBNB": "BNB",
+    "WS": "SONIC", 
+    "BROCCOLI": "BROCCOLIF3B", 
+    "USDC.E": "USDC",
+}
+
+
 
 # File paths (relative to lp-monitor output)
 METEORA_LATEST_CSV = "./lp-data/LP_meteora_positions_latest.csv"

@@ -284,18 +284,33 @@ async def main():
     # Table: Krystal PnL by Pool (only pools with open positions)
     if "Krystal PnL" in dataframes:
         put_markdown("## Krystal Positions PnL by Pool (Open Pools)")
-        k_pnl_df = dataframes["Krystal PnL"]
 
-        pnl_headers = ["Chain", "Pool Address", "Pair", "PnL (USD)", "PnL (Token B)"]
+        k_pnl_df = dataframes["Krystal PnL"].copy()
+
+        # graceful fallback if CSV lacks the new columns
+        for col in ["earliest_createdTime", "hold_pnl_usd", "lp_minus_hold_usd", "lp_pnl_usd"]:
+            if col not in k_pnl_df.columns:
+                k_pnl_df[col] = np.nan
+
+        pnl_headers = [
+            "Chain", "Owner","Pair",
+            "First Deposit",
+            "LP PnL (USD)","LP TokenB PnL", "50-50 Hold PnL (USD)", "Compare With Hold",
+            "Pool Address"                       # ← pushed to far right
+        ]
         pnl_rows = []
         for _, r in k_pnl_df.iterrows():
             pair = f"{r['tokenA_symbol']}-{r['tokenB_symbol']}"
             pnl_rows.append([
                 r["chainName"],
-                r["poolAddress"],
+                truncate_wallet(r["userAddress"]),
                 pair,
-                f"{r['pnl_usd']:.2f}",
-                f"{r['pnl_tokenB']:.6f}",
+                r["earliest_createdTime"],
+                f"{r['lp_pnl_usd']:.2f}"          if pd.notna(r["lp_pnl_usd"])       else "N/A",
+                f"{r['lp_pnl_tokenB']:.5f}"      if pd.notna(r["lp_pnl_tokenB"])   else "N/A",
+                f"{r['hold_pnl_usd']:.2f}"        if pd.notna(r["hold_pnl_usd"])     else "N/A",
+                f"{r['lp_minus_hold_usd']:.2f}"   if pd.notna(r["lp_minus_hold_usd"])else "N/A",
+                r["poolAddress"],                 # right‑most
             ])
 
         put_table(pnl_rows, header=pnl_headers)

@@ -11,18 +11,13 @@ import pandas as pd
 from datetime import datetime
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
+from common.constants import SYMBOL_MAP
+
 # --------------------------------------------------------------------------- #
 # 1.  Symbol mapper with user‑defined overrides
 # --------------------------------------------------------------------------- #
 
-CUSTOM_OVERRIDES: Dict[str, str] = {
-    'WETH': 'ETHUSDT',
-    'WBTC': 'BTCUSDT',
-    'WPOL': 'POLUSDT',
-    'WBNB': 'BNBUSDT',
-    'WS': 'SONICUSDT',
-    'BROCCOLI': 'BROCCOLIF3BUSDT',
-}
+CUSTOM_OVERRIDES = SYMBOL_MAP
 
 
 def default_symbol_mapper(token_symbol: str, base: str = "USDT") -> str:
