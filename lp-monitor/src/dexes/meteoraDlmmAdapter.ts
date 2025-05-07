@@ -314,6 +314,6 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
   } catch (error) {
     await logToFile(logFilePath, `Error fetching Meteora positions: ${error}`);
     console.error('Error fetching Meteora positions:', error);
-    return [];
+    throw error;
   }
 }

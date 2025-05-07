@@ -2,14 +2,12 @@
 import { fetchKrystalPositions } from '../dexes/krystalAdapter';
 import { KrystalPositionInfo } from './types';
 import { config } from '../config';
-import { logger } from '../utils/logger'; // Import logger from utils/logger
+import { logger } from '../utils/logger';
 
 export async function retrieveKrystalPositions(walletAddress: string): Promise<KrystalPositionInfo[]> {
   try {
-    // Use chain IDs from config
     const chainIds = config.KRYSTAL_CHAIN_IDS.join(',');
     logger.info(`Fetching Krystal positions for wallet ${walletAddress} on chains: ${chainIds}`);
-
     const positions = await fetchKrystalPositions(walletAddress, chainIds);
     if (positions.length === 0) {
       logger.info(`No Krystal positions found for wallet ${walletAddress} on chains ${chainIds}`);
@@ -18,7 +16,6 @@ export async function retrieveKrystalPositions(walletAddress: string): Promise<K
     }
     return positions;
   } catch (error) {
-    logger.error(`Error fetching Krystal positions for wallet ${walletAddress}: ${error}`);
-    return [];
+    throw error; // Rethrow to propagate to index.ts
   }
 }

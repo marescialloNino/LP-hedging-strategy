@@ -116,6 +116,6 @@ export async function fetchKrystalPositions(walletAddress: string, chainIds: str
     return krystalPositions;
   } catch (error) {
     console.error(`Error fetching positions from Krystal API for wallet ${walletAddress} on chains ${chainIds}:`, error);
-    return [];
+    throw error; // Rethrow to propagate the error
   }
 }
