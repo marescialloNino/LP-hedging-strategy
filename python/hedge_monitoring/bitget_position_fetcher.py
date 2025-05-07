@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 import csv
 from datetime import datetime
 import logging
+import json
+from pathlib import Path
 from common.path_config import LOG_DIR, HEDGING_HISTORY_CSV, HEDGING_LATEST_CSV
 
 # Configure logging
@@ -18,6 +20,27 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Error flags JSON file for hedging
+ERROR_FLAGS_PATH = Path(LOG_DIR) / 'hedge_fetching_errors.json'
+
+# Ensure lp-data directory exists
+def ensure_data_directory():
+    data_dir = ERROR_FLAGS_PATH.parent
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        logger.error(f"Error creating data directory {data_dir}: {str(e)}")
+
+# Update error flags JSON
+def update_error_flags(flags: dict):
+    try:
+        # Overwrite with new flags
+        with ERROR_FLAGS_PATH.open('w') as f:
+            json.dump(flags, f, indent=2)
+        logger.info(f"Updated hedging error flags: {flags}")
+    except Exception as e:
+        logger.error(f"Error writing hedging error flags to {ERROR_FLAGS_PATH}: {str(e)}")
 
 # Fix for Windows: opportunistic SelectorEventLoop policy
 if sys.platform == "win32":
@@ -48,11 +71,18 @@ async def fetch_4hr_funding_rate(market, symbol):
         return float(funding_rate)
     
     except Exception as e:
-        logger.error(f"Error fetching funding rate for {symbol}: {e}")
+        logger.error(f"Error fetching funding rate for {symbol}: {str(e)}")
+        update_error_flags({"HEDGING_FETCHING_BITGET_ERROR": True})
         return 0.0
 
 async def fetch_and_print_positions():
     logger.info("Starting Bitget position fetcher...")
+    
+    # Ensure data directory exists
+    ensure_data_directory()
+    
+    # Initialize error flags
+    update_error_flags({"HEDGING_FETCHING_BITGET_ERROR": False})
     
     load_dotenv()
     api_key = os.getenv("BITGET_HEDGE1_API_KEY")
@@ -60,6 +90,7 @@ async def fetch_and_print_positions():
     api_password = os.getenv("BITGET_API_PASSWORD")
     if not all([api_key, api_secret, api_password]):
         logger.error("One or more required environment variables are missing.")
+        update_error_flags({"HEDGING_FETCHING_BITGET_ERROR": True})
         raise ValueError("One or more required environment variables are missing.")
 
     market = bg.BitgetMarket(account='H1')
@@ -106,8 +137,15 @@ async def fetch_and_print_positions():
             writer.writerows(position_data)
         logger.info("Updated latest positions CSV")
 
+        # Update last_updated_hedge on successful completion
+        update_error_flags({
+            "HEDGING_FETCHING_BITGET_ERROR": False,
+            "last_updated_hedge": current_time
+        })
+
     except Exception as e:
-        logger.error(f"Error fetching positions: {e}")
+        logger.error(f"Error fetching positions: {str(e)}")
+        update_error_flags({"HEDGING_FETCHING_BITGET_ERROR": True})
         raise
     finally:
         await market._exchange_async.close()

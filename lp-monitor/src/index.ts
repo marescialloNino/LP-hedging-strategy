@@ -9,8 +9,8 @@ import fs from 'fs';
 import fsPromises from 'fs/promises';
 
 // Get data directory from environment or use default with absolute path
-const dataDir = process.env.LP_HEDGE_DATA_DIR || path.join(process.cwd(), '../lp-data');
-const ERROR_FLAGS_PATH = path.join(dataDir, 'lp_data_error.json');
+const dataDir = process.env.LP_HEDGE_LOG_DIR || path.join(process.cwd(), '../logs');
+const ERROR_FLAGS_PATH = path.join(dataDir, 'lp_fetching_errors.json');
 
 // Create data directory if it doesn't exist (using sync functions for startup)
 try {
@@ -35,7 +35,7 @@ process.on('unhandledRejection', (reason, promise) => {
 // Initialize or update error flags
 async function updateErrorFlags(flags: { [key: string]: boolean | string }) {
   try {
-    await fsPromises.writeFile(ERROR_FLAGS_PATH, JSON.stringify({ ...flags, last_updated: new Date().toISOString() }, null, 2));
+    await fsPromises.writeFile(ERROR_FLAGS_PATH, JSON.stringify({ ...flags, LP_positions_last_updated: new Date().toISOString() }, null, 2));
   } catch (error) {
     logger.error(`Error writing error flags: ${ String(error) }`);
   }
@@ -80,7 +80,7 @@ async function main() {
   let errorFlags = {
     LP_FETCHING_KRYSTAL_ERROR: false,
     LP_FETCHING_METEORA_ERROR: false,
-    last_updated: new Date().toISOString(),
+    LP_positions_last_updated: new Date().toISOString(),
   };
   await updateErrorFlags(errorFlags);
 
@@ -140,7 +140,7 @@ main()
     await updateErrorFlags({
       LP_FETCHING_KRYSTAL_ERROR: true,
       LP_FETCHING_METEORA_ERROR: true,
-      last_updated: new Date().toISOString(),
+      LP_positions_last_updated: new Date().toISOString(),
     });
     process.exit(1);
   });
