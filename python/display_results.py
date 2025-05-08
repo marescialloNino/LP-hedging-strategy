@@ -32,8 +32,8 @@ from hedge_automation.hedge_orders_sender import BitgetOrderSender
 from common.constants import HEDGABLE_TOKENS
 
 # Error JSON paths
-HEDGE_ERROR_FLAGS_PATH = Path(LOG_DIR) / '../lp-data/hedge_fetching_errors.json'
-LP_ERROR_FLAGS_PATH = Path(LOG_DIR) / '../lp-data/lp_fetching_errors.json'
+HEDGE_ERROR_FLAGS_PATH = Path(LOG_DIR) / 'hedge_fetching_errors.json'
+LP_ERROR_FLAGS_PATH = Path(LOG_DIR) / 'lp_fetching_errors.json'
 
 # Set up logging to output to terminal and file
 logging.basicConfig(
