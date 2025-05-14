@@ -43,6 +43,10 @@ LP Hedging Strategy is a multi-part project designed to monitor liquidity pool (
    ```bash
    npm start
 
+4. **Run Pnl calculations for meteora**
+   ```bash
+   npm run pnlMeteora
+
 ### For python/various-hedging-tools (Python)
 
 1. **install the tools as modules from the root directory (where setup.py is located):**
@@ -92,7 +96,7 @@ LP Hedging Strategy is a multi-part project designed to monitor liquidity pool (
     LP_HEDGE_DATA_DIR=absolute_path\LP-hedging-strategy\lp-data
 
 2. **Configure hedgeable tokens**
-    To track new hedge tokens on bitget, a mapping between the bitget ticker and the various onchain addresses of the tken is needed.
+    To track new hedge tokens on bitget, a mapping between the bitget ticker and the various onchain addresses of the token is needed.
     Add desired tokens to the HEDGEABLE_TOKENS dictionary in ./python/common/constants.py  with the following structure:
 
     "BITGET_TICKER" : {

@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # display_results.py
 
@@ -61,21 +62,6 @@ bh = BrokerHandler(
 )
 order_sender = BitgetOrderSender(bh)
 
-# Set up BrokerHandler and BitgetOrderSender globally in dummy mode
-""" params = {
-    'exchange_trade': 'bitget',
-    'account_trade': 'H1',
-    'send_orders': 'dummy'
-}
-end_point = BrokerHandler.build_end_point('bitget', account='H1')
-bh = BrokerHandler(
-    market_watch='bitget',
-    strategy_param=params,
-    end_point_trade=end_point,
-    logger_name='bitget_order_sender'
-)
-order_sender = BitgetOrderSender(bh) """
-
 async def execute_hedge_trade(token, rebalance_value):
     logger = logging.getLogger('hedge_execution')
     logger.info(f"Hedge button pressed for token: {token}, rebalance_value: {rebalance_value}")
@@ -88,7 +74,6 @@ async def execute_hedge_trade(token, rebalance_value):
     
     try:
         result = await order_sender.send_order(ticker, direction, order_size)
-        # Check if result is a tuple (expected case)
         if isinstance(result, tuple) and len(result) == 2:
             success, request = result
             logger.info(f"Result from send_order: success={success}, request={request}")
@@ -104,123 +89,171 @@ async def execute_hedge_trade(token, rebalance_value):
                 logger.error(f"Failed to send hedge order for {token}")
                 return {'success': False, 'token': token}
         else:
-            # Handle case where send_order returns False or other non-tuple
             logger.error(f"Unexpected return value from send_order for {token}: {result}")
             return {'success': False, 'token': token}
     except Exception as e:
         logger.error(f"Exception in execute_hedge_trade for {token}: {str(e)}")
         return {'success': False, 'token': token}
 
-# Function to truncate wallet address
 def truncate_wallet(wallet):
     return f"{wallet[:5]}..." if isinstance(wallet, str) and len(wallet) > 5 else wallet
 
-def calculate_token_usd_value(token, krystal_df=None, meteora_df=None):
+def calculate_token_usd_value(token, krystal_df=None, meteora_df=None, use_krystal=True, use_meteora=True):
     """
-    Calculate total USD value for a token based on its addresses from HEDGABLE_TOKENS.
-    
+    Calculate total USD value and quantity for a token based on its addresses from HEDGABLE_TOKENS,
+    matching chain-specific addresses for Krystal and Solana addresses for Meteora. Returns 0 if
+    the token has positions in an affected protocol.
+
     Args:
-        token (str): Bitget ticker (e.g., "SONICUSDT", "BNBUSDT")
+        token (str): Bitget ticker without USDT (e.g., "ETH", "BNB")
         krystal_df (pd.DataFrame): Krystal LP positions
         meteora_df (pd.DataFrame): Meteora LP positions
-    
+        use_krystal (bool): Include Krystal data in quantity computation if available
+        use_meteora (bool): Include Meteora data in quantity computation if available
+
     Returns:
-        float: Total USD value of the token across LP positions
+        tuple: (total_usd, total_qty, has_krystal, has_meteora)
+            - total_usd (float): Total USD value of the token (0 if affected protocol has positions)
+            - total_qty (float): Total quantity of the token (0 if affected protocol has positions)
+            - has_krystal (bool): True if token has Krystal positions
+            - has_meteora (bool): True if token has Meteora positions
     """
     total_usd = 0.0
-    token = f"{token}USDT"
-    # Check if token is in HEDGABLE_TOKENS
-    if token not in HEDGABLE_TOKENS:
-        print(f"Warning: Token {token} not found in HEDGABLE_TOKENS. Returning 0 USD.")
-        return total_usd
+    total_qty = 0.0
+    has_krystal = False
+    has_meteora = False
+    ticker = f"{token}USDT"
+    if ticker not in HEDGABLE_TOKENS:
+        logger.warning(f"Token {ticker} not found in HEDGABLE_TOKENS. Returning 0 USD.")
+        return total_usd, total_qty, has_krystal, has_meteora
 
-    # Get all possible addresses for the token across chains
-    token_info = HEDGABLE_TOKENS[token]
-    all_addresses = []
-    for chain, addresses in token_info.items():
-        all_addresses.extend(addresses)
+    token_info = HEDGABLE_TOKENS[ticker]
 
-    # Remove duplicates (e.g., wrapped and native might overlap)
-    unique_addresses = set(all_addresses)
-
-    # Process Krystal LP data (multi-chain)
+    # Check for Krystal positions (multi-chain)
     if krystal_df is not None and not krystal_df.empty:
-        for address in unique_addresses:
-            # Match by Token X Address
-            token_x_matches = krystal_df[krystal_df["Token X Address"] == address]
-            for _, row in token_x_matches.iterrows():
-                total_usd += float(row["Token X USD Amount"]) if pd.notna(row["Token X USD Amount"]) else 0
-            
-            # Match by Token Y Address
-            token_y_matches = krystal_df[krystal_df["Token Y Address"] == address]
-            for _, row in token_y_matches.iterrows():
-                total_usd += float(row["Token Y USD Amount"]) if pd.notna(row["Token Y USD Amount"]) else 0
+        for chain, addresses in token_info.items():
+            if chain == "solana":
+                continue  # Skip Solana for Krystal
+            addresses = [addr.lower() for addr in addresses]
+            chain_matches = krystal_df[krystal_df["Chain"].str.lower() == chain.lower()]
+            for _, row in chain_matches.iterrows():
+                token_x_addr = row["Token X Address"].lower() if pd.notna(row["Token X Address"]) else ""
+                token_y_addr = row["Token Y Address"].lower() if pd.notna(row["Token Y Address"]) else ""
+                if token_x_addr in addresses or token_y_addr in addresses:
+                    has_krystal = True
+                    break
+            if has_krystal:
+                break
 
-    # Process Meteora LP data (Solana-specific)
+    # Check for Meteora positions (Solana-specific)
     if meteora_df is not None and not meteora_df.empty:
-        # Meteora is Solana-only, so filter addresses for Solana if available
-        solana_addresses = token_info.get("solana", all_addresses)
-        for address in set(solana_addresses):
-            # Match by Token X Address
-            token_x_matches = meteora_df[meteora_df["Token X Address"] == address]
+        solana_addresses = token_info.get("solana", [])
+        solana_addresses = [addr.lower() for addr in solana_addresses]
+        for _, row in meteora_df.iterrows():
+            token_x_addr = row["Token X Address"].lower() if pd.notna(row["Token X Address"]) else ""
+            token_y_addr = row["Token Y Address"].lower() if pd.notna(row["Token Y Address"]) else ""
+            if token_x_addr in solana_addresses or token_y_addr in solana_addresses:
+                has_meteora = True
+                break
+    elif "solana" in token_info:
+        # If meteora_df is unavailable but token has Solana addresses, assume it may have Meteora positions
+        has_meteora = True
+
+    # Return 0 if token has positions in an affected protocol
+    if (not use_krystal and has_krystal) or (not use_meteora and has_meteora):
+        return 0.0, 0.0, has_krystal, has_meteora
+
+    # Compute LP data if no errors or token is unaffected
+    if use_krystal and has_krystal and krystal_df is not None and not krystal_df.empty:
+        for chain, addresses in token_info.items():
+            if chain == "solana":
+                continue
+            addresses = [addr.lower() for addr in addresses]
+            chain_matches = krystal_df[krystal_df["Chain"].str.lower() == chain.lower()]
+            token_x_matches = chain_matches[chain_matches["Token X Address"].str.lower().isin(addresses)]
             for _, row in token_x_matches.iterrows():
                 total_usd += float(row["Token X USD Amount"]) if pd.notna(row["Token X USD Amount"]) else 0
-            
-            # Match by Token Y Address
-            token_y_matches = meteora_df[meteora_df["Token Y Address"] == address]
+                total_qty += float(row["Token X Qty"]) if pd.notna(row["Token X Qty"]) else 0
+            token_y_matches = chain_matches[chain_matches["Token Y Address"].str.lower().isin(addresses)]
             for _, row in token_y_matches.iterrows():
                 total_usd += float(row["Token Y USD Amount"]) if pd.notna(row["Token Y USD Amount"]) else 0
+                total_qty += float(row["Token Y Qty"]) if pd.notna(row["Token Y Qty"]) else 0
 
-    return total_usd
+    if use_meteora and has_meteora and meteora_df is not None and not meteora_df.empty:
+        solana_addresses = token_info.get("solana", [])
+        solana_addresses = [addr.lower() for addr in solana_addresses]
+        token_x_matches = meteora_df[meteora_df["Token X Address"].str.lower().isin(solana_addresses)]
+        for _, row in token_x_matches.iterrows():
+            total_usd += float(row["Token X USD Amount"]) if pd.notna(row["Token X USD Amount"]) else 0
+            total_qty += float(row["Token X Qty"]) if pd.notna(row["Token X Qty"]) else 0
+        token_y_matches = meteora_df[meteora_df["Token Y Address"].str.lower().isin(solana_addresses)]
+        for _, row in token_y_matches.iterrows():
+            total_usd += float(row["Token Y USD Amount"]) if pd.notna(row["Token Y USD Amount"]) else 0
+            total_qty += float(row["Token Y Qty"]) if pd.notna(row["Token Y Qty"]) else 0
+
+    return total_usd, total_qty, has_krystal, has_meteora
 
 async def main():
     put_markdown("# Hedging Dashboard")
     
-    # Check error flags
     hedge_error_flags = {}
     lp_error_flags = {}
     has_error = False
     error_messages = []
+    krystal_error = False
+    meteora_error = False
+    hedging_error = False
 
-    # Read hedging error flags
-    # Note: json.load() converts JSON 'true'/'false' (lowercase, from TypeScript) to Python True/False
     try:
         if HEDGE_ERROR_FLAGS_PATH.exists():
             with HEDGE_ERROR_FLAGS_PATH.open('r') as f:
                 hedge_error_flags = json.load(f)
                 if hedge_error_flags.get("HEDGING_FETCHING_BITGET_ERROR", False):
                     has_error = True
+                    hedging_error = True
                     error_messages.append("Failed to fetch Bitget hedging data")
+                if "last_updated_hedge" not in hedge_error_flags:
+                    logger.warning("last_updated_hedge missing in hedge_fetching_errors.json")
         else:
             logger.warning(f"Hedging error flags file not found: {HEDGE_ERROR_FLAGS_PATH}")
             has_error = True
+            hedging_error = True
             error_messages.append("Hedging error flags file missing")
     except Exception as e:
         logger.error(f"Error reading hedging error flags: {str(e)}")
         has_error = True
+        hedging_error = True
         error_messages.append("Error reading hedging error flags")
 
-    # Read LP error flags
     try:
         if LP_ERROR_FLAGS_PATH.exists():
             with LP_ERROR_FLAGS_PATH.open('r') as f:
                 lp_error_flags = json.load(f)
                 if lp_error_flags.get("LP_FETCHING_KRYSTAL_ERROR", False):
                     has_error = True
+                    krystal_error = True
                     error_messages.append("Failed to fetch Krystal LP data")
                 if lp_error_flags.get("LP_FETCHING_METEORA_ERROR", False):
                     has_error = True
+                    meteora_error = True
                     error_messages.append("Failed to fetch Meteora LP data")
+                if "last_meteora_lp_update" not in lp_error_flags:
+                    logger.warning("last_meteora_lp_update missing in lp_fetching_errors.json")
+                if "last_krystal_lp_update" not in lp_error_flags:
+                    logger.warning("last_krystal_lp_update missing in lp_fetching_errors.json")
         else:
             logger.warning(f"LP error flags file not found: {LP_ERROR_FLAGS_PATH}")
             has_error = True
+            krystal_error = True
+            meteora_error = True
             error_messages.append("LP error flags file missing")
     except Exception as e:
         logger.error(f"Error reading LP error flags: {str(e)}")
         has_error = True
+        krystal_error = True
+        meteora_error = True
         error_messages.append("Error reading LP error flags")
 
-    # Display error messages if any (website remains fully functional)
     if has_error:
         error_text = "\n".join([f"- {msg}" for msg in error_messages])
         put_error(f"Data Fetching Errors:\n{error_text}", scope=None)
@@ -228,7 +261,6 @@ async def main():
     else:
         logger.info("No data fetching errors detected")
 
-    # Load CSVs with error handling
     csv_files = {
         "Rebalancing": REBALANCING_LATEST_CSV,
         "Krystal": KRYSTAL_LATEST_CSV,
@@ -246,16 +278,20 @@ async def main():
         try:
             dataframes[name] = pd.read_csv(path)
             logger.info(f"Loaded CSV: {path}")
+            if name == "Krystal" and krystal_error:
+                logger.warning(f"Krystal CSV {path} may be stale due to LP fetching error")
+            if name == "Meteora" and meteora_error:
+                logger.warning(f"Meteora CSV {path} may be stale due to LP fetching error")
+            if name == "Hedging" and hedging_error:
+                logger.warning(f"Hedging CSV {path} may be stale due to hedging fetching error")
         except Exception as e:
             logger.error(f"Error reading CSV {path}: {str(e)}")
             put_error(f"Error reading {name} CSV: {str(e)}")
 
-    # Table 1: Wallet Positions (Krystal and Meteora)
     put_markdown("## Wallet Positions")
-
-    lp_updated = lp_error_flags.get("last_updated", "Unknown")
-    put_markdown(f"**Last LP Data Update:** {lp_updated}")
-
+    meteora_updated = lp_error_flags.get("last_meteora_lp_update", "Not available")
+    krystal_updated = lp_error_flags.get("last_krystal_lp_update", "Not available")
+    put_markdown(f"**Last Meteora LP Update:** {meteora_updated}  \n**Last Krystal LP Update:** {krystal_updated}")
 
     wallet_headers = [
         "Source", "Wallet", "Chain", "Protocol", "Pair", "In Range", "Fee APR", "Initial USD", "Present USD",
@@ -319,7 +355,6 @@ async def main():
     else:
         put_text("No wallet positions found in Krystal or Meteora CSVs.")
 
-    # Table 2: Meteora Positions PnL
     if "Meteora PnL" in dataframes:
         put_markdown("## Meteora Positions PnL")
         pnl_headers = [
@@ -348,17 +383,12 @@ async def main():
         else:
             put_text("No PnL data found in Meteora PnL CSV.")
 
-    # Table: Krystal PnL by Pool (only pools with open positions)
     if "Krystal PnL" in dataframes:
         put_markdown("## Krystal Positions PnL by Pool (Open Pools)")
-
         k_pnl_df = dataframes["Krystal PnL"].copy()
-
-        # graceful fallback if CSV lacks the new columns
         for col in ["earliest_createdTime", "hold_pnl_usd", "lp_minus_hold_usd", "lp_pnl_usd"]:
             if col not in k_pnl_df.columns:
                 k_pnl_df[col] = np.nan
-
         pnl_headers = [
             "Chain", "Owner","Pair",
             "First Deposit",
@@ -373,31 +403,29 @@ async def main():
                 truncate_wallet(r["userAddress"]),
                 pair,
                 r["earliest_createdTime"],
-                f"{r['lp_pnl_usd']:.2f}"          if pd.notna(r["lp_pnl_usd"])       else "N/A",
-                f"{r['lp_pnl_tokenB']:.5f}"      if pd.notna(r["lp_pnl_tokenB"])   else "N/A",
-                f"{r['hold_pnl_usd']:.2f}"        if pd.notna(r["hold_pnl_usd"])     else "N/A",
-                f"{r['lp_minus_hold_usd']:.2f}"   if pd.notna(r["lp_minus_hold_usd"])else "N/A",
+                f"{r['lp_pnl_usd']:.2f}" if pd.notna(r['lp_pnl_usd']) else "N/A",
+                f"{r['lp_pnl_tokenB']:.5f}" if pd.notna(r['lp_pnl_tokenB']) else "N/A",
+                f"{r['hold_pnl_usd']:.2f}" if pd.notna(r['hold_pnl_usd']) else "N/A",
+                f"{r['lp_minus_hold_usd']:.2f}" if pd.notna(r['lp_minus_hold_usd']) else "N/A",
                 r["poolAddress"],
             ])
-
         put_table(pnl_rows, header=pnl_headers)
 
-    # Table 3: Token Hedge Summary (Rebalancing + Hedging)
     if "Rebalancing" in dataframes or "Hedging" in dataframes:
         put_markdown("## Token Hedge Summary")
+        meteora_updated = lp_error_flags.get("last_meteora_lp_update", "Not available")
+        krystal_updated = lp_error_flags.get("last_krystal_lp_update", "Not available")
+        hedge_updated = hedge_error_flags.get("last_updated_hedge", "Not available")
+        put_markdown(f"**Last Meteora LP Update:** {meteora_updated}  \n**Last Krystal LP Update:** {krystal_updated}  \n**Last Hedge Data Update:** {hedge_updated}")
+        logger.info(f"Displayed timestamps: Meteora={meteora_updated}, Krystal={krystal_updated}, Hedge={hedge_updated}")
 
-
-        hedge_updated = hedge_error_flags.get("last_updated_hedge", "Unknown")
-        put_markdown(f"**Last Hedge Data Update:** {hedge_updated}")
-
-
-        # Add "Close All Hedges" button
         put_buttons(
             [{'label': 'Close All Hedges', 'value': 'all', 'color': 'danger'}],
             onclick=lambda _: run_async(handle_close_all_hedges())
         )
 
         token_data = []
+        # Always pass DataFrames for position checking, even if there's an error
         krystal_df = dataframes.get("Krystal")
         meteora_df = dataframes.get("Meteora")
         def strip_usdt(token):
@@ -405,9 +433,9 @@ async def main():
 
         hedge_processing = {}
 
-        async def handle_hedge_click(token, rebalance_value):
+        async def handle_hedge_click(token, rebalance_value, action):
             logger = logging.getLogger('hedge_execution')
-            logger.info(f"Handling hedge click for {token} with rebalance_value {rebalance_value}")
+            logger.info(f"Handling hedge click for {token} with rebalance_value {rebalance_value}, action {action}")
             
             if hedge_processing.get(token, False):
                 toast(f"Hedge already in progress for {token}", duration=5, color="warning")
@@ -415,7 +443,9 @@ async def main():
 
             hedge_processing[token] = True
             try:
-                task = asyncio.create_task(execute_hedge_trade(token, rebalance_value))
+                # Adjust sign based on action
+                signed_rebalance_value = rebalance_value if action == "buy" else -rebalance_value if action == "sell" else 0.0
+                task = asyncio.create_task(execute_hedge_trade(token, signed_rebalance_value))
                 result = await task
                 
                 if result['success']:
@@ -440,8 +470,7 @@ async def main():
 
             hedge_processing[token] = True
             try:
-                # To close the hedge, send an order with the opposite quantity
-                close_qty = -hedged_qty  # Opposite of current hedge to bring to zero
+                close_qty = -hedged_qty
                 task = asyncio.create_task(execute_hedge_trade(token, close_qty))
                 result = await task
                 
@@ -449,7 +478,6 @@ async def main():
                     put_markdown(f"### Close Hedge Order Request for {result['token']}")
                     put_code(json.dumps(result['request'], indent=2), language='json')
                     toast(f"Close hedge triggered for {result['token']}", duration=5, color="success")
-                    # Update Hedging CSV
                     if "Hedging" in dataframes:
                         hedging_df = dataframes["Hedging"]
                         ticker = f"{token}USDT"
@@ -472,6 +500,11 @@ async def main():
             
             if any(hedge_processing.values()):
                 toast("Hedge or close operation in progress, please wait", duration=5, color="warning")
+                return
+
+            if hedging_error:
+                toast("Cannot close hedges due to hedging data fetch error", duration=5, color="error")
+                logger.warning("Skipped close all hedges due to hedging_error")
                 return
 
             if "Rebalancing" in dataframes:
@@ -562,7 +595,7 @@ async def main():
                 "LP Qty": "sum",
                 "Hedged Qty": "sum",
                 "Rebalance Value": "sum",
-                "Rebalance Action": "first"   # Use the first encountered action for each token
+                "Rebalance Action": "first"
             }).reset_index()
             
             if "Hedging" in dataframes:
@@ -584,25 +617,53 @@ async def main():
 
             for _, row in token_summary.iterrows():
                 token = strip_usdt(row["Token"])
-                lp_qty = row["LP Qty"]
-                hedged_qty = row["quantity"]  # Use quantity from Hedging CSV
-                rebalance_value = row["Rebalance Value"]
+                # Determine which data sources to use for quantity computation
+                use_krystal = not krystal_error
+                use_meteora = not meteora_error
+                lp_amount_usd, lp_qty, has_krystal, has_meteora = calculate_token_usd_value(
+                    token, krystal_df, meteora_df, use_krystal, use_meteora
+                )
+
+                # Initialize fields
+                hedged_qty = row["quantity"]
                 hedge_amount = row["amount"]
-                funding_rate = row["funding_rate"] * 10000  # Convert to BIPS
-                action = row["Rebalance Action"].strip().lower()  
-                
-                lp_amount_usd = calculate_token_usd_value(token, krystal_df, meteora_df)
-                rebalance_value_with_sign = float(f"{'+' if action == 'buy' else '-'}{abs(rebalance_value):.6f}")
-                
-                # Create action buttons
+                funding_rate = row["funding_rate"] * 10000
+                action = row["Rebalance Action"].strip().lower() if pd.notna(row["Rebalance Action"]) else ""
+                rebalance_value = row["Rebalance Value"] if pd.notna(row["Rebalance Value"]) else np.nan
+                if action == "buy":
+                    rebalance_value = abs(rebalance_value) if pd.notna(rebalance_value) else np.nan
+                elif action == "sell":
+                    rebalance_value = -abs(rebalance_value) if pd.notna(rebalance_value) else np.nan
+
+                # Adjust LP and rebalance fields based on errors and token positions
+                if (meteora_error and has_meteora) or (krystal_error and has_krystal):
+                    # Token has positions in an affected protocol: show N/A
+                    lp_qty = np.nan
+                    lp_amount_usd = np.nan
+                    rebalance_value = np.nan
+                    action = ""
+                else:
+                    # Use computed LP values
+                    lp_qty = lp_qty if pd.notna(lp_qty) else np.nan
+                    lp_amount_usd = lp_amount_usd if pd.notna(lp_amount_usd) else np.nan
+
+                # Handle hedging error
+                if hedging_error:
+                    hedged_qty = np.nan
+                    hedge_amount = np.nan
+                    funding_rate = np.nan
+                    rebalance_value = np.nan
+                    action = ""
+
+                # Button logic
                 hedge_button = None
                 close_button = None
-                if abs(rebalance_value) != 0.0:
+                if action in ["buy", "sell"] and pd.notna(rebalance_value) and not hedging_error:
                     hedge_button = put_buttons(
                         [{'label': 'Hedge', 'value': f"hedge_{token}", 'color': 'primary'}],
-                        onclick=lambda v, t=token, rv=rebalance_value_with_sign: run_async(handle_hedge_click(t, rv))
+                        onclick=lambda v, t=token, rv=rebalance_value, a=action: run_async(handle_hedge_click(t, rv, a))
                     )
-                if abs(hedged_qty) > 0:
+                if abs(hedged_qty) > 0 and not pd.isna(hedged_qty) and not hedging_error:
                     close_button = put_buttons(
                         [{'label': 'Close', 'value': f"close_{token}", 'color': 'danger'}],
                         onclick=lambda v, t=token, hq=hedged_qty: run_async(handle_close_hedge(t, hq))
@@ -610,29 +671,29 @@ async def main():
 
                 if hedge_button or close_button:
                     button = put_row([
-                        hedge_button if hedge_button else put_text(""),  # Empty placeholder if no Hedge button
-                        put_text(" "),  # Small spacer between buttons
-                        close_button if close_button else put_text("")   # Empty placeholder if no Close button
-                    ], size='auto 5px auto')  # Adjust spacing as needed
+                        hedge_button if hedge_button else put_text(""),
+                        put_text(" "),
+                        close_button if close_button else put_text("")
+                    ], size='auto 5px auto')
                 else:
                     button = put_text("No action needed")
 
                 token_data.append([
                     token,
-                    f"{lp_amount_usd:.2f}",
-                    f"{hedge_amount:.4f}",
-                    f"{lp_qty:.4f}",
-                    f"{hedged_qty:.4f}",
-                    rebalance_value_with_sign,
+                    f"{lp_amount_usd:.2f}" if pd.notna(lp_amount_usd) else "N/A",
+                    f"{hedge_amount:.4f}" if pd.notna(hedge_amount) else "N/A",
+                    f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
+                    f"{hedged_qty:.4f}" if pd.notna(hedged_qty) else "N/A",
+                    f"{rebalance_value:.6f}" if pd.notna(rebalance_value) else "N/A",
                     button,
-                    f"{funding_rate}" if pd.notna(funding_rate) else "N/A"
+                    f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
                 ])
                 
             token_headers = [
                 "Token", "LP Amount USD", "Hedge Amount USD", "LP Qty", "Hedge Qty", "Suggested Hedge Qty", "Action", "Funding Rate (BIPS)"
             ]
             put_table(token_data, header=token_headers)
-        elif "Hedging" in dataframes:
+        elif "Hedging" in dataframes and not hedging_error:
             hedging_df = dataframes["Hedging"]
             token_data = []
             hedging_agg = hedging_df.groupby("symbol").agg({
@@ -641,70 +702,69 @@ async def main():
                 "funding_rate": "mean"
             }).reset_index()
 
-            async def handle_close_hedge(token, hedged_qty):
-                logger = logging.getLogger('hedge_execution')
-                logger.info(f"Handling close hedge for {token} with hedged_qty {hedged_qty}")
-                
-                if hedge_processing.get(token, False):
-                    toast(f"Close hedge already in progress for {token}", duration=5, color="warning")
-                    return
-
-                hedge_processing[token] = True
-                try:
-                    close_qty = -hedged_qty
-                    task = asyncio.create_task(execute_hedge_trade(token, close_qty))
-                    result = await task
-                    
-                    if result['success']:
-                        put_markdown(f"### Close Hedge Order Request for {result['token']}")
-                        put_code(json.dumps(result['request'], indent=2), language='json')
-                        toast(f"Close hedge triggered for {result['token']}", duration=5, color="success")
-                        # Update Hedging CSV
-                        hedging_df = dataframes["Hedging"]
-                        ticker = f"{token}USDT"
-                        hedging_df.loc[hedging_df["symbol"] == ticker, "quantity"] = 0
-                        hedging_df.loc[hedging_df["symbol"] == ticker, "amount"] = 0
-                        hedging_df.loc[hedging_df["symbol"] == ticker, "funding_rate"] = 0
-                        hedging_df.to_csv(HEDGING_LATEST_CSV, index=False)
-                        logger.info(f"Updated {HEDGING_LATEST_CSV} for {ticker}")
-                    else:
-                        toast(f"Failed to close hedge for {result['token']}", duration=5, color="error")
-                except Exception as e:
-                    logger.error(f"Exception in handle_close_hedge for {token}: {str(e)}")
-                    toast(f"Error processing close hedge for {token}", duration=5, color="error")
-                finally:
-                    hedge_processing[token] = False
-
             for _, row in hedging_agg.iterrows():
                 token = strip_usdt(row["symbol"])
                 hedged_qty = row["quantity"]
                 hedge_amount = row["amount"]
-                funding_rate = row["funding_rate"]* 10000  # Convert to BIPS
+                funding_rate = row["funding_rate"] * 10000
                 
+                # Check for LP data
+                use_krystal = not krystal_error
+                use_meteora = not meteora_error
+                lp_amount_usd, lp_qty, has_krystal, has_meteora = calculate_token_usd_value(
+                    token, krystal_df, meteora_df, use_krystal, use_meteora
+                )
+                
+                # Adjust LP fields based on errors and token positions
+                if (meteora_error and has_meteora) or (krystal_error and has_krystal):
+                    lp_qty = np.nan
+                    lp_amount_usd = np.nan
+                    rebalance_value = np.nan
+                    action = ""
+                else:
+                    lp_qty = lp_qty if pd.notna(lp_qty) else np.nan
+                    lp_amount_usd = lp_amount_usd if pd.notna(lp_amount_usd) else np.nan
+                    action = row["Rebalance Action"].strip().lower() if pd.notna(row["Rebalance Action"]) else ""
+                    rebalance_value = row["Rebalance Value"] if pd.notna(row["Rebalance Value"]) else np.nan
+                    if action == "buy":
+                        rebalance_value = abs(rebalance_value) if pd.notna(rebalance_value) else np.nan
+                    elif action == "sell":
+                        rebalance_value = -abs(rebalance_value) if pd.notna(rebalance_value) else np.nan
+
                 action_buttons = []
                 if abs(hedged_qty) > 0:
                     action_buttons.append({'label': 'Close', 'value': f"close_{token}", 'color': 'danger'})
+                if action in ["buy", "sell"] and not pd.isna(rebalance_value):
+                    action_buttons.append({'label': 'Hedge', 'value': f"hedge_{token}", 'color': 'primary'})
 
                 if action_buttons:
                     button = put_buttons(
                         action_buttons,
-                        onclick=lambda v, t=token, hq=hedged_qty: run_async(handle_close_hedge(t, hq))
+                        onclick=lambda v, t=token, hq=hedged_qty, rv=rebalance_value, a=action: run_async(
+                            handle_hedge_click(t, rv, a) if 'hedge' in v else handle_close_hedge(t, hq)
+                        )
                     )
                 else:
                     button = put_text("No action needed")
 
                 token_data.append([
                     token,
-                    f"{hedge_amount:.4f}",
-                    f"{hedged_qty:.4f}",
+                    f"{lp_amount_usd:.2f}" if pd.notna(lp_amount_usd) else "N/A",
+                    f"{hedge_amount:.4f}" if pd.notna(hedge_amount) else "N/A",
+                    f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
+                    f"{hedged_qty:.4f}" if pd.notna(hedged_qty) else "N/A",
+                    f"{rebalance_value:.6f}" if pd.notna(rebalance_value) else "N/A",
                     button,
-                    f"{funding_rate:.6f}" if pd.notna(funding_rate) else "N/A"
+                    f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
                 ])
 
-            token_headers = ["Token", "Hedge Amount USD", "Hedge Qty", "Action", "Funding Rate (BIPS)"]
+            token_headers = [
+                "Token", "LP Amount USD", "Hedge Amount USD", "LP Qty", "Hedge Qty", "Suggested Hedge Qty", "Action", "Funding Rate (BIPS)"
+            ]
             put_table(token_data, header=token_headers)
+        else:
+            put_text("No rebalancing or hedging data available.")
 
-# Ensure cleanup on exit
 def cleanup():
     asyncio.run(order_sender.close())
 

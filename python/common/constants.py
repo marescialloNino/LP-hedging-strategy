@@ -45,7 +45,8 @@ HEDGABLE_TOKENS = {
         "base": ["0x98d0baa52b2d063e780de12f615f963fe8537553"]
     },
     "VIRTUALUSDT": {
-        "base": ["0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b"]
+        "base": ["0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b"],
+        "solana" : ["3iQL8BFS2vE7mww4ehAqQHAsbmRNCrPxizWAT2Zfyr9y"]
     },
     "BROCCOLIF3BUSDT": {
         "bsc": ["0x12b4356c65340fb02cdff01293f95febb1512f3b"]
