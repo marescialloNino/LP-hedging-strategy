@@ -10,10 +10,11 @@ import json
 import sys
 import logging
 import uuid
+import subprocess
 import atexit
 from pathlib import Path
 from common.path_config import (
-    REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV, METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV, LOG_DIR
+    REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV, METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV, LOG_DIR, ROOT_DIR
 )
 
 # Fix for Windows event loop issue
@@ -46,6 +47,28 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+
+async def run_shell_script(script_path):
+    try:
+        os.chmod(script_path, 0o755)
+        process = await asyncio.create_subprocess_exec(
+            script_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=os.path.dirname(script_path) or '.'
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode == 0:
+            logger.info(f"Successfully executed {script_path}: {stdout.decode()}")
+            return True, stdout.decode()
+        else:
+            logger.error(f"Failed to execute {script_path}: {stderr.decode()}")
+            return False, stderr.decode()
+    except Exception as e:
+        logger.error(f"Exception running {script_path}: {str(e)}")
+        return False, str(e)
+
 
 # Set up BrokerHandler and BitgetOrderSender globally in real mode
 params = {
@@ -194,8 +217,21 @@ def calculate_token_usd_value(token, krystal_df=None, meteora_df=None, use_kryst
     return total_usd, total_qty, has_krystal, has_meteora
 
 async def main():
-    put_markdown("# Hedging Dashboard")
+    put_markdown("# Hedging Dashboard 💸 🧪 👽")
     
+    async def handle_run_workflow():
+        script_path = os.path.join(ROOT_DIR, 'run_workflow.sh')
+        logger.info(f"Run Workflow button clicked, executing {script_path}")
+        toast("Running workflow...could take a while, you can check BTC dominance in the meantime 🟠", duration=10, color="warning")
+        success, output = await run_shell_script(script_path)
+        if success:
+            toast("Workflow executed successfully", duration=5, color="success")
+        else:
+            toast(f"Failed to execute workflow: {output}", duration=5, color="error")
+    put_buttons(
+        [{'label': 'Run Workflow 🚀', 'value': 'run_workflow', 'color': 'primary'}],
+        onclick=lambda _: run_async(handle_run_workflow()))
+
     hedge_error_flags = {}
     lp_error_flags = {}
     has_error = False
@@ -355,7 +391,23 @@ async def main():
     else:
         put_text("No wallet positions found in Krystal or Meteora CSVs.")
 
-    if "Meteora PnL" in dataframes:
+    put_markdown("# LP positions PnL")
+
+    async def handle_calculate_pnl():
+        script_path = os.path.join(ROOT_DIR, 'run_pnl_calculations.sh')
+        logger.info(f"Calculate PnL button clicked, executing {script_path}")
+        toast("Running pnl calculations...could take a (long) while, you can find some new shitcoins in the meanitme 📈", duration=10, color="warning")
+        success, output = await run_shell_script(script_path)
+        if success: 
+            toast("PnL calculations executed successfully, how did it go? can you buy a Lambo 🚗 or a scooter 🛵?", duration=10, color="success")
+        else:
+            toast(f"Failed to execute PnL calculations: {output}", duration=5, color="error")
+    put_buttons(
+        [{'label': 'Calculate PnL 💰', 'value': 'calculate_pnl', 'color': 'primary'}],
+        onclick=lambda _: run_async(handle_calculate_pnl())
+    )
+    if "Meteora PnL" in dataframes:   
+
         put_markdown("## Meteora Positions PnL")
         pnl_headers = [
             "Timestamp", "Owner", "Pair", "Realized PNL (USD)", "Unrealized PNL (USD)", "Net PNL (USD)",
@@ -412,7 +464,7 @@ async def main():
         put_table(pnl_rows, header=pnl_headers)
 
     if "Rebalancing" in dataframes or "Hedging" in dataframes:
-        put_markdown("## Token Hedge Summary")
+        put_markdown("# Hedging Dashboard")
         meteora_updated = lp_error_flags.get("last_meteora_lp_update", "Not available")
         krystal_updated = lp_error_flags.get("last_krystal_lp_update", "Not available")
         hedge_updated = hedge_error_flags.get("last_updated_hedge", "Not available")
@@ -420,7 +472,7 @@ async def main():
         logger.info(f"Displayed timestamps: Meteora={meteora_updated}, Krystal={krystal_updated}, Hedge={hedge_updated}")
 
         put_buttons(
-            [{'label': 'Close All Hedges', 'value': 'all', 'color': 'danger'}],
+            [{'label': 'Close All Hedges 🦍', 'value': 'all', 'color': 'danger'}],
             onclick=lambda _: run_async(handle_close_all_hedges())
         )
 
