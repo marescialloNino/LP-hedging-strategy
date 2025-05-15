@@ -713,9 +713,9 @@ async def main():
                 if action in ["buy", "sell"] and pd.notna(rebalance_value) and not hedging_error:
                     hedge_button = put_buttons(
                         [{'label': 'Hedge', 'value': f"hedge_{token}", 'color': 'primary'}],
-                        onclick=lambda v, t=token, rv=rebalance_value, a=action: run_async(handle_hedge_click(t, rv, a))
+                        onclick=lambda v, t=token, rv=abs(rebalance_value), a=action: run_async(handle_hedge_click(t, rv, a))
                     )
-                if abs(hedged_qty) > 0 and not pd.isna(hedged_qty) and not hedging_error:
+                if abs(hedged_qty) != 0 and not pd.isna(hedged_qty) and not hedging_error:
                     close_button = put_buttons(
                         [{'label': 'Close', 'value': f"close_{token}", 'color': 'danger'}],
                         onclick=lambda v, t=token, hq=hedged_qty: run_async(handle_close_hedge(t, hq))
@@ -792,7 +792,7 @@ async def main():
                 if action_buttons:
                     button = put_buttons(
                         action_buttons,
-                        onclick=lambda v, t=token, hq=hedged_qty, rv=rebalance_value, a=action: run_async(
+                        onclick=lambda v, t=token, hq=hedged_qty, rv=abs(rebalance_value), a=action: run_async(
                             handle_hedge_click(t, rv, a) if 'hedge' in v else handle_close_hedge(t, hq)
                         )
                     )
