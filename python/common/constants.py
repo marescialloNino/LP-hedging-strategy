@@ -60,7 +60,12 @@ HEDGABLE_TOKENS = {
     "TOSHIUSDT": {
         "base": ["0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4"]
     },
-
+    "ARBUSDT": {
+        "arbitrum": ["0x912ce59144191c1204e64559fe8253a0e49e6548"]
+    },
+    "GAMEUSDT": {
+        "base": ["0x1c4cca7c5db003824208adda61bd749e55f463a3"]
+    },
     # Solana
     "SOLUSDT": {
         "solana": ["So11111111111111111111111111111111111111112"]
