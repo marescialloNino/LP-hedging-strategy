@@ -1,8 +1,9 @@
 from pathlib import Path
 import os
 
-ROOT_DIR = Path(os.getenv('ROOT_DIR', '..')).resolve()
+
 # Load environment variables
+ROOT_DIR = Path(os.getenv('ROOT_DIR', '..')).resolve()
 LOG_DIR = Path(os.getenv('LP_HEDGE_LOG_DIR', '../logs')).resolve()
 DATA_DIR = Path(os.getenv('LP_HEDGE_DATA_DIR', '../lp-data')).resolve()
 
@@ -19,6 +20,10 @@ METEORA_LATEST_CSV = DATA_DIR / "LP_meteora_positions_latest.csv"
 KRYSTAL_LATEST_CSV = DATA_DIR / "LP_krystal_positions_latest.csv"
 METEORA_PNL_CSV = DATA_DIR / "position_pnl_results.csv"
 KRYSTAL_POOL_PNL_CSV = DATA_DIR /"krystal_pnl_by_pool.csv"
+
+# shell script files
+WORKFLOW_SHELL_SCRIPT = ROOT_DIR / "run_workflow.sh"
+PNL_SHELL_SCRIPT = ROOT_DIR / "run_pnl_calculations.sh"
 
 # Ensure subdirectories exist
 REBALANCING_HISTORY_DIR.mkdir(parents=True, exist_ok=True)

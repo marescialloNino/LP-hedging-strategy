@@ -14,7 +14,7 @@ import subprocess
 import atexit
 from pathlib import Path
 from common.path_config import (
-    REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV, METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV, LOG_DIR, ROOT_DIR
+    REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV, METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV, LOG_DIR, WORKFLOW_SHELL_SCRIPT, PNL_SHELL_SCRIPT
 )
 
 # Fix for Windows event loop issue
@@ -381,7 +381,7 @@ async def main():
     put_markdown("# LP positions PnL")
 
     async def handle_calculate_pnl():
-        script_path = os.path.join(ROOT_DIR, 'run_pnl_calculations.sh')
+        script_path = PNL_SHELL_SCRIPT
         logger.info(f"Calculate PnL button clicked, executing {script_path}")
         toast("Running pnl calculations...could take a (long) while, you can find some new shitcoins in the meanitme 📈", duration=10, color="warning")
         success, output = await run_shell_script(script_path)
@@ -459,7 +459,7 @@ async def main():
         logger.info(f"Displayed timestamps: Meteora={meteora_updated}, Krystal={krystal_updated}, Hedge={hedge_updated}")
 
         async def handle_run_workflow():
-            script_path = os.path.join(ROOT_DIR, 'run_workflow.sh')
+            script_path = WORKFLOW_SHELL_SCRIPT
             logger.info(f"Run Workflow button clicked, executing {script_path}")
             toast("Running workflow...could take a while, you can check BTC dominance in the meantime 🟠", duration=10, color="warning")
             success, output = await run_shell_script(script_path)
