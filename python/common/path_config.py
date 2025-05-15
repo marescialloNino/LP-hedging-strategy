@@ -1,9 +1,12 @@
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
-# Load environment variables
 ROOT_DIR = Path(os.getenv('ROOT_DIR', '..')).resolve()
+# Load environment variables
 LOG_DIR = Path(os.getenv('LP_HEDGE_LOG_DIR', '../logs')).resolve()
 DATA_DIR = Path(os.getenv('LP_HEDGE_DATA_DIR', '../lp-data')).resolve()
 
