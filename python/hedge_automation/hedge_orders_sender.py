@@ -115,7 +115,7 @@ class BitgetOrderSender:
             'maxAliveOrderTime': max_alive_order_time,
             'direction': direction_str,
             'childOrderDelay': child_order_delay,
-            'start': 'Manual',
+            'start': 'Automatic',
             'type': 'LIMIT_WITH_LEEWAY',
             'maxStratTime': 30 * 60 * 1000,
             'timeInForce': 'GTC',
