@@ -1,4 +1,3 @@
-
 import { config } from './config';
 import { retrieveMeteoraPositions } from './services/meteoraPositionService';
 import { retrieveKrystalPositions } from './services/krystalPositionService';
@@ -71,6 +70,7 @@ async function readErrorFlags(): Promise<ErrorFlags> {
 async function updateErrorFlags(flags: ErrorFlags) {
   try {
     await fsPromises.writeFile(ERROR_FLAGS_PATH, JSON.stringify(flags, null, 2));
+    logger.debug(`Updated error flags: ${JSON.stringify(flags)}`);
   } catch (error) {
     logger.error(`Error writing error flags: ${String(error)}`);
   }
@@ -127,13 +127,11 @@ async function main() {
       allMeteoraRecords = allMeteoraRecords.concat(meteoraRecords);
     } catch (error) {
       logger.error(`Failed to process Solana wallet ${solWallet}: ${String(error)}`);
-      errorFlags.LP_FETCHING_METEORA_ERROR = true;
       meteoraSuccess = false;
-      await updateErrorFlags(errorFlags);
     }
   }
 
-  // Write Meteora latest positions and update timestamp if successful
+  // Write Meteora latest positions
   if (allMeteoraRecords.length > 0) {
     await writeMeteoraLatestCSV(allMeteoraRecords);
     logger.info(`Wrote ${allMeteoraRecords.length} Meteora positions to latest CSV`);
@@ -141,10 +139,10 @@ async function main() {
     logger.info('No Meteora positions found across all wallets');
   }
 
-  // Update Meteora timestamp only on success
+  // Update Meteora error flag and timestamp
+  errorFlags.LP_FETCHING_METEORA_ERROR = !meteoraSuccess;
   if (meteoraSuccess && allMeteoraRecords.length > 0) {
     errorFlags.last_meteora_lp_update = new Date().toISOString();
-    await updateErrorFlags(errorFlags);
   }
 
   // Process EVM wallets (Krystal positions)
@@ -154,13 +152,11 @@ async function main() {
       allKrystalRecords = allKrystalRecords.concat(krystalRecords);
     } catch (error) {
       logger.error(`Failed to process EVM wallet ${evmWallet}: ${String(error)}`);
-      errorFlags.LP_FETCHING_KRYSTAL_ERROR = true;
       krystalSuccess = false;
-      await updateErrorFlags(errorFlags);
     }
   }
 
-  // Write Krystal latest positions and update timestamp if successful
+  // Write Krystal latest positions
   if (allKrystalRecords.length > 0) {
     await writeKrystalLatestCSV(allKrystalRecords);
     logger.info(`Wrote ${allKrystalRecords.length} Krystal positions to latest CSV`);
@@ -168,23 +164,21 @@ async function main() {
     logger.info('No Krystal positions found across all wallets');
   }
 
-  // Update Krystal timestamp only on success
+  // Update Krystal error flag and timestamp
+  errorFlags.LP_FETCHING_KRYSTAL_ERROR = !krystalSuccess;
   if (krystalSuccess && allKrystalRecords.length > 0) {
     errorFlags.last_krystal_lp_update = new Date().toISOString();
-    await updateErrorFlags(errorFlags);
   }
+
+  // Write updated error flags
+  await updateErrorFlags(errorFlags);
 
   logger.info('Batch process completed.');
 }
 
 main()
   .then(() => process.exit(0))
-  .catch(async (error) => {
+  .catch((error) => {
     logger.error('Error in batch process:', { error: error.message, stack: error.stack });
-    // Update only error flags, preserve timestamps
-    const errorFlags = await readErrorFlags();
-    errorFlags.LP_FETCHING_KRYSTAL_ERROR = true;
-    errorFlags.LP_FETCHING_METEORA_ERROR = true;
-    await updateErrorFlags(errorFlags);
     process.exit(1);
   });
