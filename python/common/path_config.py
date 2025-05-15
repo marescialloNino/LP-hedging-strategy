@@ -28,6 +28,7 @@ KRYSTAL_POOL_PNL_CSV = DATA_DIR /"krystal_pnl_by_pool.csv"
 # shell script files
 WORKFLOW_SHELL_SCRIPT = ROOT_DIR / "run_workflow.sh"
 PNL_SHELL_SCRIPT = ROOT_DIR / "run_pnl_calculations.sh"
+HEDGE_SHELL_SCRIPT = ROOT_DIR / "run_hedge_calculations.sh"
 
 # Ensure subdirectories exist
 REBALANCING_HISTORY_DIR.mkdir(parents=True, exist_ok=True)

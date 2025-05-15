@@ -14,7 +14,8 @@ import subprocess
 import atexit
 from pathlib import Path
 from common.path_config import (
-    REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV, METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV, LOG_DIR, WORKFLOW_SHELL_SCRIPT, PNL_SHELL_SCRIPT
+    REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV, METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV, LOG_DIR,
+    WORKFLOW_SHELL_SCRIPT, PNL_SHELL_SCRIPT, HEDGE_SHELL_SCRIPT
 )
 
 # Fix for Windows event loop issue
@@ -470,6 +471,20 @@ async def main():
         put_buttons(
             [{'label': 'Update Data 🎲', 'value': 'run_workflow', 'color': 'primary'}],
             onclick=lambda _: run_async(handle_run_workflow()))
+        
+        async def handle_run_hedge():
+            script_path = HEDGE_SHELL_SCRIPT
+            logger.info(f"Update Hedge button clicked, executing {script_path}")
+            toast("Running hedge workflow... keep your hedge fresh 🧊", duration=10, color="warning")
+            success, output = await run_shell_script(script_path)
+            if success:
+                toast("Workflow executed successfully", duration=5, color="success")
+            else:
+                toast(f"Failed to execute workflow: {output}", duration=5, color="error")
+        put_buttons(
+            [{'label': 'Update Hedge Data ❄️', 'value': 'run_hedge_calculations', 'color': 'primary'}],
+            onclick=lambda _: run_async(handle_run_hedge()))
+
 
         put_buttons(
             [{'label': 'Close All Hedges 🦍', 'value': 'all', 'color': 'danger'}],
