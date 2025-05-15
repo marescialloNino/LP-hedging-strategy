@@ -217,20 +217,7 @@ def calculate_token_usd_value(token, krystal_df=None, meteora_df=None, use_kryst
     return total_usd, total_qty, has_krystal, has_meteora
 
 async def main():
-    put_markdown("# Hedging Dashboard 💸 🧪 👽")
-    
-    async def handle_run_workflow():
-        script_path = os.path.join(ROOT_DIR, 'run_workflow.sh')
-        logger.info(f"Run Workflow button clicked, executing {script_path}")
-        toast("Running workflow...could take a while, you can check BTC dominance in the meantime 🟠", duration=10, color="warning")
-        success, output = await run_shell_script(script_path)
-        if success:
-            toast("Workflow executed successfully", duration=5, color="success")
-        else:
-            toast(f"Failed to execute workflow: {output}", duration=5, color="error")
-    put_buttons(
-        [{'label': 'Run Workflow 🚀', 'value': 'run_workflow', 'color': 'primary'}],
-        onclick=lambda _: run_async(handle_run_workflow()))
+    put_markdown("#   🔮 🧙‍♂️ 🧪 💸 CM's Hedging Dashboard 💸 🧪 🧙‍♂️ 🔮")
 
     hedge_error_flags = {}
     lp_error_flags = {}
@@ -470,6 +457,19 @@ async def main():
         hedge_updated = hedge_error_flags.get("last_updated_hedge", "Not available")
         put_markdown(f"**Last Meteora LP Update:** {meteora_updated}  \n**Last Krystal LP Update:** {krystal_updated}  \n**Last Hedge Data Update:** {hedge_updated}")
         logger.info(f"Displayed timestamps: Meteora={meteora_updated}, Krystal={krystal_updated}, Hedge={hedge_updated}")
+
+        async def handle_run_workflow():
+            script_path = os.path.join(ROOT_DIR, 'run_workflow.sh')
+            logger.info(f"Run Workflow button clicked, executing {script_path}")
+            toast("Running workflow...could take a while, you can check BTC dominance in the meantime 🟠", duration=10, color="warning")
+            success, output = await run_shell_script(script_path)
+            if success:
+                toast("Workflow executed successfully", duration=5, color="success")
+            else:
+                toast(f"Failed to execute workflow: {output}", duration=5, color="error")
+        put_buttons(
+            [{'label': 'Update Data 🎲', 'value': 'run_workflow', 'color': 'primary'}],
+            onclick=lambda _: run_async(handle_run_workflow()))
 
         put_buttons(
             [{'label': 'Close All Hedges 🦍', 'value': 'all', 'color': 'danger'}],
