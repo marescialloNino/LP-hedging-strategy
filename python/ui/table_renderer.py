@@ -2,8 +2,7 @@ import pandas as pd
 import numpy as np
 import json
 from pathlib import Path
-from pywebio.output import put_table, put_text, put_buttons, put_row, put_widget, put_markdown
-from pywebio.session import run_async
+from pywebio.output import put_table, put_text, put_row, put_markdown, put_html, toast, put_buttons
 from common.utils import calculate_token_usd_value
 from common.constants import HEDGABLE_TOKENS
 from common.path_config import CONFIG_DIR
@@ -15,31 +14,50 @@ def truncate_wallet(wallet):
 
 def load_auto_hedge_tokens():
     """
-    Load tokens selected for auto-hedging from auto_hedge_tokens.json.
-    Returns: set of token symbols (e.g., {"ETH", "BTC"}).
+    Load tokens' automation status from auto_hedge_tokens.json.
+    If the file doesn't exist, initialize it with all hedgeable tokens set to false.
+    Returns: dict of token symbols to automation status (e.g., {"ETH": false, "BTC": false}).
     """
     try:
         if AUTO_HEDGE_TOKENS_PATH.exists():
             with AUTO_HEDGE_TOKENS_PATH.open('r') as f:
-                data = json.load(f)
-                return set(data.get("tokens", []))
-        return set()
-    except Exception as e:
+                content = f.read().strip()
+                if not content:
+                    raise ValueError("File is empty")
+                data = json.loads(content)
+                # Ensure all hedgeable tokens are included
+                hedgable_tokens = [ticker.replace("USDT", "") for ticker in HEDGABLE_TOKENS.keys()]
+                default = {token: False for token in hedgable_tokens}
+                default.update(data)
+                return default
+        else:
+            # Initialize with all hedgeable tokens set to false
+            hedgable_tokens = [ticker.replace("USDT", "") for ticker in HEDGABLE_TOKENS.keys()]
+            data = {token: False for token in hedgable_tokens}
+            save_auto_hedge_tokens(data)
+            return data
+    except (json.JSONDecodeError, ValueError) as e:
         print(f"Error loading auto_hedge_tokens.json: {str(e)}")
-        return set()
+        # Initialize with defaults on error
+        hedgable_tokens = [ticker.replace("USDT", "") for ticker in HEDGABLE_TOKENS.keys()]
+        data = {token: False for token in hedgable_tokens}
+        save_auto_hedge_tokens(data)
+        return data
 
 def save_auto_hedge_tokens(tokens):
     """
-    Save selected tokens to auto_hedge_tokens.json.
+    Save token automation status to auto_hedge_tokens.json.
     Args:
-        tokens: set or list of token symbols.
+        tokens: dict of token symbols to automation status (e.g., {"ETH": false, "BTC": true}).
     """
     try:
         CONFIG_DIR.mkdir(exist_ok=True)
         with AUTO_HEDGE_TOKENS_PATH.open('w') as f:
-            json.dump({"tokens": list(tokens)}, f, indent=2)
+            json.dump(tokens, f, indent=2)
+        toast("Configuration saved successfully!", duration=3, color="success")
     except Exception as e:
         print(f"Error saving auto_hedge_tokens.json: {str(e)}")
+        toast(f"Error saving configuration: {str(e)}", duration=3, color="error")
 
 def render_wallet_positions(dataframes, error_flags):
     """
@@ -167,62 +185,20 @@ def render_pnl_tables(dataframes, error_flags):
             ])
         put_table(pnl_rows, header=pnl_headers)
 
-
-def render_hedging_dashboard(dataframes, error_flags, hedge_actions):
+def render_hedging_table(dataframes, error_flags, hedge_actions):
     """
-    Render the hedging dashboard table with a Hedge Automation section above it.
+    Render the hedging table.
     
     Args:
         dataframes (dict): Loaded CSVs from data_loader
         error_flags (dict): Error flags from data_loader
         hedge_actions (HedgeActions): Instance for handling hedge/close actions
     """
-    from pywebio.output import put_markdown, put_html, put_table, put_text, put_buttons, put_row, toast
     from pywebio.session import run_async
-    import pandas as pd
-    import numpy as np
-
     errors = error_flags['errors']
     krystal_df = dataframes.get("Krystal")
     meteora_df = dataframes.get("Meteora")
     auto_hedge_tokens = load_auto_hedge_tokens()
-
-    # Hedge Automation Section
-    put_markdown("## Hedge Automation")
-    hedgable_tokens = [ticker.replace("USDT", "") for ticker in HEDGABLE_TOKENS.keys()]
-    async def update_auto_hedge(token, checked):
-        auto_hedge_tokens = load_auto_hedge_tokens()
-        if checked:
-            auto_hedge_tokens.add(token)
-            toast(f"Enabled auto-hedge for {token}", duration=3, color="success")
-        else:
-            auto_hedge_tokens.discard(token)
-            toast(f"Disabled auto-hedge for {token}", duration=3, color="success")
-        save_auto_hedge_tokens(auto_hedge_tokens)
-
-    checkboxes = []
-    for token in sorted(hedgable_tokens):
-        checked = "checked" if token in auto_hedge_tokens else ""
-        button_id = f"toggle_{token}"
-        checkboxes.append(f"""
-            <label style='margin-right: 15px;'>
-                <input type='checkbox' {checked} onchange='
-                    var checked = this.checked;
-                    document.getElementById("{button_id}").click();
-                '>
-                {token}
-            </label>
-            <button id="{button_id}" style="display: none;"></button>
-        """)
-        # Add hidden button to trigger Python callback
-        put_buttons(
-            [{'label': '', 'value': token, 'color': 'primary'}],
-            onclick=lambda v, t=token: run_async(update_auto_hedge(t, v in auto_hedge_tokens ^ True)),
-            scope=None,
-            group=button_id
-        )
-    checkbox_html = f"<div style='display: flex; flex-wrap: wrap; gap: 10px;'>{''.join(checkboxes)}</div>"
-    put_html(checkbox_html)
 
     if "Rebalancing" in dataframes or "Hedging" in dataframes:
         token_headers = [
@@ -267,7 +243,7 @@ def render_hedging_dashboard(dataframes, error_flags, hedge_actions):
                 hedged_qty = row["quantity"]
                 hedge_amount = row["amount"]
                 funding_rate = row["funding_rate"] * 10000
-                is_auto = token in auto_hedge_tokens
+                is_auto = auto_hedge_tokens.get(token, False)
 
                 # For auto-hedged tokens, suppress Suggested Hedge Qty and Action
                 if is_auto:
@@ -352,7 +328,7 @@ def render_hedging_dashboard(dataframes, error_flags, hedge_actions):
                 lp_amount_usd, lp_qty, has_krystal, has_meteora = calculate_token_usd_value(
                     token, krystal_df, meteora_df, use_krystal, use_meteora
                 )
-                is_auto = token in auto_hedge_tokens
+                is_auto = auto_hedge_tokens.get(token, False)
 
                 # For auto-hedged tokens, suppress Suggested Hedge Qty and Action
                 if is_auto:
@@ -415,3 +391,38 @@ def render_hedging_dashboard(dataframes, error_flags, hedge_actions):
             put_text("No rebalancing or hedging data available.")
     else:
         put_text("No rebalancing or hedging data available.")
+
+def render_hedge_automation():
+    """
+    Prepare checkbox options for hedgeable tokens and ensure auto_hedge_tokens.json is synced.
+    Returns: tuple of (options, auto_hedge_tokens)
+        - options: List of checkbox options for PyWebIO.
+        - auto_hedge_tokens: Current auto-hedge tokens dictionary.
+    """
+    auto_hedge_tokens = load_auto_hedge_tokens()
+    hedgable_tokens = sorted([ticker.replace("USDT", "") for ticker in HEDGABLE_TOKENS.keys()])
+    
+    # Sync auto_hedge_tokens with hedgable_tokens
+    updated = False
+    # Add new tokens
+    for token in hedgable_tokens:
+        if token not in auto_hedge_tokens:
+            auto_hedge_tokens[token] = False
+            updated = True
+    # Remove obsolete tokens
+    for token in list(auto_hedge_tokens.keys()):
+        if token not in hedgable_tokens:
+            del auto_hedge_tokens[token]
+            updated = True
+    
+    # Save if updated
+    if updated:
+        save_auto_hedge_tokens(auto_hedge_tokens)
+    
+    # Create checkbox options
+    options = [
+        {'label': token, 'value': token, 'selected': auto_hedge_tokens[token]}
+        for token in hedgable_tokens
+    ]
+    
+    return options, auto_hedge_tokens
