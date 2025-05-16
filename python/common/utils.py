@@ -36,7 +36,7 @@ async def execute_hedge_trade(token, rebalance_value, order_sender):
     
     order_size = abs(rebalance_value)
     direction = 1 if rebalance_value > 0 else -1
-    ticker = f"{token}USDT"
+    ticker = token if token.upper().endswith("USDT") else f"{token}USDT"
     logger.info(f"Sending order for ticker: {ticker} with order_size: {order_size} and direction: {direction}")
     
     try:
@@ -54,7 +54,11 @@ async def execute_hedge_trade(token, rebalance_value, order_sender):
                 }
             else:
                 logger.error(f"Failed to send hedge order for {token}")
-                return {'success': False, 'token': token}
+                return {
+                    'success': False,
+                    'token': token,
+                    'request': request
+                }
         else:
             logger.error(f"Unexpected return value from send_order for {token}: {result}")
             return {'success': False, 'token': token}

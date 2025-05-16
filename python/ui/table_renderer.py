@@ -63,8 +63,8 @@ def render_wallet_positions(dataframes, error_flags):
     """
     Render wallet positions table for Krystal and Meteora.
     """
-    krystal_error = error_flags['errors']['krystal_error']
-    meteora_error = error_flags['errors']['meteora_error']
+    krystal_error = error_flags.get('krystal_error', False)
+    meteora_error = error_flags.get('meteora_error', False)
     wallet_headers = [
         "Source", "Wallet", "Chain", "Protocol", "Pair", "In Range", "Fee APR", "Initial USD", "Present USD",
         "Token X Qty", "Token Y Qty", "Current Price", "Min Price", "Max Price", "Pool Address"
@@ -131,7 +131,10 @@ def render_pnl_tables(dataframes, error_flags):
     """
     Render PnL tables for Meteora and Krystal.
     """
-    if "Meteora PnL" in dataframes and not error_flags['errors']['meteora_error']:
+    meteora_error = error_flags.get('meteora_error', False)
+    krystal_error = error_flags.get('krystal_error', False)
+
+    if "Meteora PnL" in dataframes and not meteora_error:
         put_text("## Meteora Positions PnL")
         pnl_headers = [
             "Timestamp", "Owner", "Pair", "Realized PNL (USD)", "Unrealized PNL (USD)", "Net PNL (USD)",
@@ -159,7 +162,7 @@ def render_pnl_tables(dataframes, error_flags):
         else:
             put_text("No PnL data found in Meteora PnL CSV.")
 
-    if "Krystal PnL" in dataframes and not error_flags['errors']['krystal_error']:
+    if "Krystal PnL" in dataframes and not krystal_error:
         put_text("## Krystal Positions PnL by Pool (Open Pools)")
         k_pnl_df = dataframes["Krystal PnL"].copy()
         for col in ["earliest_createdTime", "hold_pnl_usd", "lp_minus_hold_usd", "lp_pnl_usd"]:
@@ -195,7 +198,9 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
         hedge_actions (HedgeActions): Instance for handling hedge/close actions
     """
     from pywebio.session import run_async
-    errors = error_flags['errors']
+    krystal_error = error_flags.get('krystal_error', False)
+    meteora_error = error_flags.get('meteora_error', False)
+    hedging_error = error_flags.get('hedging_error', False)
     krystal_df = dataframes.get("Krystal")
     meteora_df = dataframes.get("Meteora")
     auto_hedge_tokens = load_auto_hedge_tokens()
@@ -235,8 +240,8 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
             for _, row in token_summary.iterrows():
                 token = row["Token"].replace("USDT", "").strip()
-                use_krystal = not errors['krystal_error']
-                use_meteora = not errors['meteora_error']
+                use_krystal = not krystal_error
+                use_meteora = not meteora_error
                 lp_amount_usd, lp_qty, has_krystal, has_meteora = calculate_token_usd_value(
                     token, krystal_df, meteora_df, use_krystal, use_meteora
                 )
@@ -257,7 +262,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     elif action == "sell":
                         rebalance_value = -abs(rebalance_value) if pd.notna(rebalance_value) else np.nan
 
-                if (errors['meteora_error'] and has_meteora) or (errors['krystal_error'] and has_krystal):
+                if (meteora_error and has_meteora) or (krystal_error and has_krystal):
                     lp_qty = np.nan
                     lp_amount_usd = np.nan
                     rebalance_value = np.nan
@@ -266,7 +271,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     lp_qty = lp_qty if pd.notna(lp_qty) else np.nan
                     lp_amount_usd = lp_amount_usd if pd.notna(lp_amount_usd) else np.nan
 
-                if errors['hedging_error']:
+                if hedging_error:
                     hedged_qty = np.nan
                     hedge_amount = np.nan
                     funding_rate = np.nan
@@ -275,14 +280,14 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
                 hedge_button = None
                 close_button = None
-                if not is_auto and action in ["buy", "sell"] and pd.notna(rebalance_value) and not errors['hedging_error']:
+                if not is_auto and action in ["buy", "sell"] and pd.notna(rebalance_value) and not hedging_error:
                     hedge_button = put_buttons(
                         [{'label': 'Hedge', 'value': f"hedge_{token}", 'color': 'primary'}],
                         onclick=lambda v, t=token, rv=abs(rebalance_value), a=action: run_async(
                             hedge_actions.handle_hedge_click(t, rv, a)
                         )
                     )
-                if abs(hedged_qty) != 0 and not pd.isna(hedged_qty) and not errors['hedging_error']:
+                if not is_auto and abs(hedged_qty) != 0 and not pd.isna(hedged_qty) and not hedging_error:
                     close_button = put_buttons(
                         [{'label': 'Close', 'value': f"close_{token}", 'color': 'danger'}],
                         onclick=lambda v, t=token, hq=hedged_qty: run_async(
@@ -310,7 +315,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
                 ])
 
-        elif "Hedging" in dataframes and not errors['hedging_error']:
+        elif "Hedging" in dataframes and not hedging_error:
             hedging_df = dataframes["Hedging"]
             hedging_agg = hedging_df.groupby("symbol").agg({
                 "quantity": "sum",
@@ -323,8 +328,8 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 hedged_qty = row["quantity"]
                 hedge_amount = row["amount"]
                 funding_rate = row["funding_rate"] * 10000
-                use_krystal = not errors['krystal_error']
-                use_meteora = not errors['meteora_error']
+                use_krystal = not krystal_error
+                use_meteora = not meteora_error
                 lp_amount_usd, lp_qty, has_krystal, has_meteora = calculate_token_usd_value(
                     token, krystal_df, meteora_df, use_krystal, use_meteora
                 )
@@ -342,7 +347,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     elif action == "sell":
                         rebalance_value = -abs(rebalance_value) if pd.notna(rebalance_value) else np.nan
 
-                if (errors['meteora_error'] and has_meteora) or (errors['krystal_error'] and has_krystal):
+                if (meteora_error and has_meteora) or (krystal_error and has_krystal):
                     lp_qty = np.nan
                     lp_amount_usd = np.nan
                     rebalance_value = np.nan
@@ -351,7 +356,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     lp_qty = lp_qty if pd.notna(lp_qty) else np.nan
                     lp_amount_usd = lp_amount_usd if pd.notna(lp_amount_usd) else np.nan
 
-                if errors['hedging_error']:
+                if hedging_error:
                     hedged_qty = np.nan
                     hedge_amount = np.nan
                     funding_rate = np.nan
@@ -362,7 +367,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 if not is_auto and abs(hedged_qty) > 0:
                     action_buttons.append({'label': 'Close', 'value': f"close_{token}", 'color': 'danger'})
                 if not is_auto and action in ["buy", "sell"] and not pd.isna(rebalance_value):
-                    action_buttons.append({'label': 'Hedge', 'value': f"hedge_{token}", 'color': 'primary'})
+                    action_buttons.append({'label': 'Hedge', 'value': f"hedge_{token}", 'color': "primary"})
 
                 if action_buttons:
                     button = put_buttons(

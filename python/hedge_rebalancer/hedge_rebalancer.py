@@ -1,4 +1,3 @@
-# hedge_rebalancer.py
 import pandas as pd
 import logging
 import sys
@@ -9,6 +8,7 @@ from common.path_config import (
     LOG_DIR, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGING_LATEST_CSV,
     REBALANCING_HISTORY_DIR, REBALANCING_LATEST_CSV
 )
+from ui.table_renderer import load_auto_hedge_tokens
 
 # Configure logging
 logging.basicConfig(
@@ -22,7 +22,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def calculate_hedge_quantities():
-    """Calculate total hedged quantities from Bitget positions by symbol (always negative)."""
+    """Calculate total hedged quantities from Bitget positions by symbol (always negative or zero)."""
     hedge_quantities = {symbol: 0.0 for symbol in HEDGABLE_TOKENS}
     if HEDGING_LATEST_CSV.exists():
         try:
@@ -90,12 +90,13 @@ def calculate_lp_quantities():
     
     return lp_quantities
 
-def check_hedge_rebalance():
+def check_hedge_rebalance(positive_trigger=0.2, negative_trigger=-0.4):
     """Compare LP quantities with absolute hedge quantities and output results."""
-    logger.info("Starting hedge-rebalancer...")
+    logger.info(f"Starting hedge-rebalancer with positive_trigger={positive_trigger}, negative_trigger={negative_trigger}...")
     
     hedge_quantities = calculate_hedge_quantities()
     lp_quantities = calculate_lp_quantities()
+    auto_hedge_tokens = load_auto_hedge_tokens()
 
     rebalance_results = []
     timestamp_for_csv = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
@@ -106,21 +107,29 @@ def check_hedge_rebalance():
         lp_qty = lp_quantities[symbol]
         abs_hedge_qty = abs(hedge_qty)
 
+        if lp_qty == 0 and hedge_qty == 0:
+            continue
+
+        if lp_qty < 0:
+            logger.warning(f"Unexpected negative LP quantity for {symbol}: {lp_qty}")
+            continue
+
+        if hedge_qty > 0:
+            logger.warning(f"Unexpected positive hedge quantity for {symbol}: {hedge_qty}")
+            continue
+
         difference = lp_qty - abs_hedge_qty
         abs_difference = abs(difference)
         percentage_diff = (abs_difference / lp_qty) * 100 if lp_qty > 0 else 0
-
-        if lp_qty == 0 and hedge_qty == 0:
-            continue
 
         logger.info(f"Token: {symbol}")
         logger.info(f"  LP Qty: {lp_qty}, Hedged Qty: {hedge_qty} (Short: {abs_hedge_qty})")
         logger.info(f"  Difference: {difference} ({percentage_diff:.2f}% of LP)")
 
+        # Standard rebalancing for all tokens
         rebalance_action = "nothing"
         rebalance_value = 0.0
-        
-        if lp_qty > 0 and abs_difference > 0.1 * lp_qty:
+        if lp_qty > 0 and difference != 0:
             if difference > 0:
                 rebalance_action = "sell"
                 rebalance_value = abs_difference
@@ -130,10 +139,26 @@ def check_hedge_rebalance():
                 rebalance_value = abs_difference
                 logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} ***")
         elif lp_qty == 0 and hedge_qty != 0:
-            # Set action based on hedge_qty sign to close the position
-            rebalance_action = "buy" if hedge_qty < 0 else "sell"
+            rebalance_action = "buy"
             rebalance_value = abs_hedge_qty
             logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} (no LP exposure) ***")
+
+        # Auto-hedging trigger for auto-hedged tokens
+        is_auto = auto_hedge_tokens.get(symbol.replace("USDT", ""), False)
+        trigger_auto_order = False
+        
+        if is_auto and lp_qty > 0:
+            if hedge_qty == 0:
+                trigger_auto_order = True
+                logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty:.5f} for {symbol} (no hedge position) ***")
+            elif hedge_qty < 0:
+                ratio = (lp_qty / abs_hedge_qty) - 1
+                if ratio > positive_trigger:
+                    trigger_auto_order = True
+                    logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty - abs_hedge_qty:.5f} for {symbol} (ratio: {ratio:.2f}) ***")
+                elif ratio < negative_trigger:
+                    trigger_auto_order = True
+                    logger.warning(f"  *** AUTO HEDGE TRIGGER: buy {abs_hedge_qty - lp_qty:.5f} for {symbol} (ratio: {ratio:.2f}) ***")
 
         rebalance_results.append({
             "Timestamp": timestamp_for_csv,
@@ -143,7 +168,9 @@ def check_hedge_rebalance():
             "Difference": difference,
             "Percentage Diff": round(percentage_diff, 2),
             "Rebalance Action": rebalance_action,
-            "Rebalance Value": round(rebalance_value, 5)
+            "Rebalance Value": round(rebalance_value, 5),
+            "Auto Hedge": is_auto,
+            "Trigger Auto Order": trigger_auto_order
         })
 
     if rebalance_results:
@@ -153,8 +180,11 @@ def check_hedge_rebalance():
         history_filename = output_dir / f"rebalancing_results_{timestamp_for_filename}.csv"
         latest_filename = REBALANCING_LATEST_CSV
         
-        headers = ["Timestamp", "Token", "LP Qty", "Hedged Qty", "Difference", 
-                  "Percentage Diff", "Rebalance Action", "Rebalance Value"]
+        headers = [
+            "Timestamp", "Token", "LP Qty", "Hedged Qty", "Difference",
+            "Percentage Diff", "Rebalance Action", "Rebalance Value",
+            "Auto Hedge", "Trigger Auto Order"
+        ]
         
         with open(history_filename, mode='w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=headers)

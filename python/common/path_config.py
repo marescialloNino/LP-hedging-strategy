@@ -24,6 +24,7 @@ METEORA_LATEST_CSV = DATA_DIR / "LP_meteora_positions_latest.csv"
 KRYSTAL_LATEST_CSV = DATA_DIR / "LP_krystal_positions_latest.csv"
 METEORA_PNL_CSV = DATA_DIR / "position_pnl_results.csv"
 KRYSTAL_POOL_PNL_CSV = DATA_DIR /"krystal_pnl_by_pool.csv"
+ORDER_MONITOR_CSV = DATA_DIR / "order_monitor.csv"
 
 # shell script files
 WORKFLOW_SHELL_SCRIPT = ROOT_DIR / "run_workflow.sh"

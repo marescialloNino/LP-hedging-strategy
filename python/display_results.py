@@ -6,10 +6,11 @@ import logging
 import atexit
 from pathlib import Path
 from pywebio import start_server, config
-from pywebio.input import checkbox
-from pywebio.output import use_scope, put_markdown, put_error, put_text, put_table, put_buttons, toast
+from pywebio.input import checkbox, input_group, actions
+from pywebio.output import use_scope, put_markdown, put_error, put_text, put_table, put_buttons, toast, put_html
 from pywebio.session import run_async
 from common.data_loader import load_data
+from common.constants import HEDGABLE_TOKENS
 from common.path_config import WORKFLOW_SHELL_SCRIPT, PNL_SHELL_SCRIPT, HEDGE_SHELL_SCRIPT, LOG_DIR
 from hedge_automation.order_manager import OrderManager
 from hedge_automation.hedge_actions import HedgeActions
@@ -131,24 +132,39 @@ async def main():
         else:
             put_text("No rebalancing or hedging data available.")
 
-        # Hedge Automation section
         put_markdown("## Hedge Automation")
-        # Load current auto-hedge settings
         options, auto_hedge_tokens = render_hedge_automation()
+        hedgable_tokens = sorted([ticker.replace("USDT", "") for ticker in HEDGABLE_TOKENS.keys()])
+        
+        put_text(f"Debug: Number of checkbox options: {len(options)}")  # Debug output
+        
+        async def handle_config_change():
+            if options:
+                form_data = await input_group("Auto-hedge Tokens", [
+                    checkbox(
+                        name="auto_hedge_tokens",
+                        options=options,
+                        inline=True,
+                        help_text="Select tokens to auto-hedge"
+                    ),
+                    actions(
+                        name="submit",
+                        buttons=[{'label': 'Save Configuration', 'value': 'save', 'color': 'success'}]
+                    )
+                ])
+                
+                if form_data['submit'] == 'save':
+                    save_auto_hedge_tokens({
+                        token: token in form_data['auto_hedge_tokens'] for token in hedgable_tokens
+                    })
+                    toast("Configuration saved successfully!", duration=3, color="success")
+            else:
+                toast("No hedgeable tokens available.", duration=3, color="warning")
+        
         if options:
-            selected = await checkbox(
-                name="auto_hedge_tokens",
-                options=options,
-                inline=True,
-                help_text="Check to enable automatic hedging"
-            )
-            # Save configuration immediately on button click
-            def on_save(_):
-                new_cfg = {token: token in selected for token in auto_hedge_tokens.keys()}
-                save_auto_hedge_tokens(new_cfg)
             put_buttons(
-                [{'label': 'Save Configuration', 'value': 'save', 'color': 'success'}],
-                onclick=on_save
+                [{'label': 'Change Automation Configuration', 'value': 'config', 'color': 'primary'}],
+                onclick=lambda _: run_async(handle_config_change())
             )
         else:
             put_text("No hedgeable tokens available.")

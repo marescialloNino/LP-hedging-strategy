@@ -164,8 +164,7 @@ class BitgetOrderSender:
         except Exception as e:
             self.logger.error(f"Error sending order: {str(e)}")
             print(f"Error sending order: {str(e)}", flush=True)
-            return False
-        
+            return False, request
 
     async def close(self):
         """Close the exchange connection"""
@@ -179,10 +178,10 @@ async def test_order_sender():
     params = {
         'exchange_trade': 'bitget',
         'account_trade': 'hedge1',
-        'send_orders': 'bitget'  # Change from 'dummy' to 'bitget' or remove this key
+        'send_orders': 'bitget'
     }
     
-    end_point = BrokerHandler.build_end_point('bitget', account='H1')  # 'H1' matches BITGET_HEDGE1_API_KEY
+    end_point = BrokerHandler.build_end_point('bitget', account='H1')
     bh = BrokerHandler(
         market_watch='bitget',
         strategy_param=params,
@@ -197,7 +196,7 @@ async def test_order_sender():
         # Test parameters
         ticker = 'ETHUSDT'
         direction = 1  # Buy
-        hedge_qty = 0.3  # 0.5 ETH
+        hedge_qty = 0.3
         
         # Send the order to the real execution machine
         success, request = await order_sender.send_order(ticker, direction, hedge_qty)
