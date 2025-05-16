@@ -1,6 +1,9 @@
 node_modules
 /logs
 /lp-data
+
+web_broker.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -12,6 +15,8 @@ __pycache__/
 # C extensions
 *.so
 *.sh
+
+
 
 # Distribution / packaging
 .Python
