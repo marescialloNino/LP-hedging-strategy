@@ -32,3 +32,6 @@ HEDGE_SHELL_SCRIPT = ROOT_DIR / "run_hedge_calculations.sh"
 
 # Ensure subdirectories exist
 REBALANCING_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+
+# python package internal paths
+CONFIG_DIR = ROOT_DIR / "python/config"
