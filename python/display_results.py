@@ -138,8 +138,6 @@ async def main():
         options, auto_hedge_tokens = render_hedge_automation()
         hedgable_tokens = sorted([ticker.replace("USDT", "") for ticker in HEDGABLE_TOKENS.keys()])
         
-        put_text(f"Debug: Number of checkbox options: {len(options)}")  # Debug output
-        
         async def handle_config_change():
             if options:
                 form_data = await input_group("Auto-hedge Tokens", [

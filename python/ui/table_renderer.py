@@ -135,7 +135,7 @@ def render_pnl_tables(dataframes, error_flags):
     krystal_error = error_flags.get('krystal_error', False)
 
     if "Meteora PnL" in dataframes and not meteora_error:
-        put_text("## Meteora Positions PnL")
+        put_markdown("## Meteora Positions PnL")
         pnl_headers = [
             "Timestamp", "Owner", "Pair", "Realized PNL (USD)", "Unrealized PNL (USD)", "Net PNL (USD)",
             "Realized PNL (Token B)", "Unrealized PNL (Token B)", "Net PNL (Token B)", "Position ID", "Pool Address"
@@ -163,7 +163,7 @@ def render_pnl_tables(dataframes, error_flags):
             put_text("No PnL data found in Meteora PnL CSV.")
 
     if "Krystal PnL" in dataframes and not krystal_error:
-        put_text("## Krystal Positions PnL by Pool (Open Pools)")
+        put_markdown("## Krystal Positions PnL by Pool (Open Pools)")
         k_pnl_df = dataframes["Krystal PnL"].copy()
         for col in ["earliest_createdTime", "hold_pnl_usd", "lp_minus_hold_usd", "lp_pnl_usd"]:
             if col not in k_pnl_df.columns:
