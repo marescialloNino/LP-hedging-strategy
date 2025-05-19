@@ -5,7 +5,7 @@ from pathlib import Path
 from pywebio.output import put_table, put_text, put_row, put_markdown, put_html, toast, put_buttons
 from common.utils import calculate_token_usd_value
 from common.constants import HEDGABLE_TOKENS
-from common.path_config import CONFIG_DIR
+from common.path_config import CONFIG_DIR, HEDGING_LATEST_CSV
 
 AUTO_HEDGE_TOKENS_PATH = CONFIG_DIR / "auto_hedge_tokens.json"
 
@@ -431,3 +431,69 @@ def render_hedge_automation():
     ]
     
     return options, auto_hedge_tokens
+
+
+from pywebio.output import put_markdown, toast, popup
+from pywebio.input import input_group, input, select, actions
+import pandas as pd
+from pywebio.session import run_async
+import logging
+
+logger = logging.getLogger('render_ui_tables')
+
+async def render_custom_hedge_section(hedge_actions):
+    put_markdown("## Custom Hedge Order")
+    try:
+        # Load hedgeable tokens from HEDGABLE_TOKENS
+        logger.debug("Loading HEDGABLE_TOKENS for custom hedge")
+        tokens = sorted([ticker.replace("USDT", "") for ticker in HEDGABLE_TOKENS.keys()])
+        if not tokens:
+            put_markdown("No hedgeable tokens available.")
+            logger.warning("No tokens found in HEDGABLE_TOKENS")
+            return
+
+        logger.debug(f"Tokens available: {tokens}")
+        # Render button to trigger custom hedge form
+        put_buttons(
+            [{'label': 'Build Custom Hedge Order', 'value': 'build_hedge', 'color': 'primary'}],
+            onclick=lambda _: run_async(show_custom_hedge_form(hedge_actions, tokens))
+        )
+    except Exception as e:
+        logger.error(f"Error rendering custom hedge section: {str(e)}")
+        toast(f"Error rendering custom hedge section: {str(e)}", duration=5, color="error")
+
+async def show_custom_hedge_form(hedge_actions, tokens):
+    logger.debug("Showing custom hedge form")
+    inputs = await input_group(
+        "Enter custom hedge details",
+        [
+            select(
+                "Token",
+                name="token",
+                options=[{"label": token, "value": token} for token in tokens]
+            ),
+            input(
+                "Quantity",
+                name="quantity",
+                type="number",
+                validate=lambda x: None if isinstance(x, (int, float)) and x > 0 else "Quantity must be a positive number",
+                placeholder="Enter quantity (e.g., 100.5)"
+            ),
+            select(
+                "Action",
+                name="action",
+                options=[
+                    {"label": "Buy", "value": "buy"},
+                    {"label": "Sell", "value": "sell"}
+                ]
+            )
+        ],
+        cancelable=True
+    )
+    if inputs is None:
+        logger.debug("Custom hedge input cancelled")
+        toast("Custom hedge cancelled", duration=5, color="info")
+        return
+
+    logger.debug(f"Custom hedge inputs: {inputs}")
+    await hedge_actions.handle_custom_hedge(inputs)

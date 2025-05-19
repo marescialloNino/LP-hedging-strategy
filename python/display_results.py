@@ -6,7 +6,7 @@ import logging
 import atexit
 from pathlib import Path
 from pywebio import start_server, config
-from pywebio.input import checkbox, input_group, actions
+from pywebio.input import checkbox, input_group, actions, select, input
 from pywebio.output import use_scope, put_markdown, put_error, put_text, put_table, put_buttons, toast, put_html
 from pywebio.session import run_async
 from common.data_loader import load_data
@@ -21,8 +21,10 @@ from ui.table_renderer import (
     render_hedging_table,
     render_hedge_automation,
     save_auto_hedge_tokens,
-    load_auto_hedge_tokens
+    load_auto_hedge_tokens,
+    render_custom_hedge_section
 )
+
 
 # Fix for Windows event loop issue
 if sys.platform == 'win32':
@@ -168,6 +170,8 @@ async def main():
             )
         else:
             put_text("No hedgeable tokens available.")
+
+        await render_custom_hedge_section(hedge_actions)
 
 
 def cleanup():

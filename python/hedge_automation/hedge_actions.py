@@ -5,6 +5,7 @@ import json
 from pywebio.output import put_markdown, put_code, toast
 from common.utils import execute_hedge_trade
 from common.path_config import HEDGING_LATEST_CSV
+from common.constants import HEDGABLE_TOKENS
 
 logger = logging.getLogger('hedge_execution')
 
@@ -14,6 +15,7 @@ class HedgeActions:
         self.hedge_processing = {}
 
     async def handle_hedge_click(self, token, rebalance_value, action):
+        logger.debug(f"handle_hedge_click called for token: {token}, rebalance_value: {rebalance_value}, action: {action}")
         if self.hedge_processing.get(token, False):
             toast(f"Hedge already in progress for {token}", duration=5, color="warning")
             return
@@ -28,14 +30,51 @@ class HedgeActions:
                 put_code(json.dumps(result['request'], indent=2), language='json')
                 toast(f"Hedge trade triggered for {result['token']}", duration=5, color="success")
             else:
+                logger.debug(f"Hedge trade failed: {result}")
                 toast(f"Failed to generate hedge order for {result['token']}", duration=5, color="error")
         except Exception as e:
             logger.error(f"Exception in handle_hedge_click for {token}: {str(e)}")
             toast(f"Error processing hedge for {token}", duration=5, color="error")
         finally:
             self.hedge_processing[token] = False
+            logger.debug(f"hedge_processing reset for {token}")
+
+    async def handle_custom_hedge(self, inputs):
+        token = inputs["token"]
+        quantity = inputs["quantity"]
+        action = inputs["action"]
+        logger.debug(f"handle_custom_hedge called for token: {token}, quantity: {quantity}, action: {action}")
+
+        if self.hedge_processing.get(token, False):
+            toast(f"Hedge already in progress for {token}", duration=5, color="warning")
+            return
+
+        self.hedge_processing[token] = True
+        try:
+            signed_quantity = quantity if action == "buy" else -quantity
+            if signed_quantity == 0.0:
+                logger.debug("Invalid quantity detected")
+                toast(f"Invalid quantity for {token}", duration=5, color="error")
+                return
+
+            result = await execute_hedge_trade(token, signed_quantity, self.order_sender)
+            
+            if result['success']:
+                put_markdown(f"### Custom Hedge Order Request for {result['token']} ({action.capitalize()} {quantity:.5f})")
+                put_code(json.dumps(result['request'], indent=2), language='json')
+                toast(f"Custom hedge trade triggered for {result['token']}", duration=5, color="success")
+            else:
+                logger.debug(f"Custom hedge trade failed: {result}")
+                toast(f"Failed to generate custom hedge order for {result['token']}", duration=5, color="error")
+        except Exception as e:
+            logger.error(f"Exception in handle_custom_hedge for {token}: {str(e)}")
+            toast(f"Error processing custom hedge for {token}", duration=5, color="error")
+        finally:
+            self.hedge_processing[token] = False
+            logger.debug(f"hedge_processing reset for {token}")
 
     async def handle_close_hedge(self, token, hedged_qty, hedging_df=None):
+        logger.debug(f"handle_close_hedge called for token: {token}, hedged_qty: {hedged_qty}")
         if self.hedge_processing.get(token, False):
             toast(f"Close hedge already in progress for {token}", duration=5, color="warning")
             return
@@ -65,6 +104,7 @@ class HedgeActions:
             self.hedge_processing[token] = False
 
     async def handle_close_all_hedges(self, token_summary, hedging_df, hedging_error):
+        logger.debug("handle_close_all_hedges called")
         if any(self.hedge_processing.values()):
             toast("Hedge or close operation in progress, please wait", duration=5, color="warning")
             return

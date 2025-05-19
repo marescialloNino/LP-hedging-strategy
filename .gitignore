@@ -1,8 +1,10 @@
+.env
 node_modules
 /logs
 /lp-data
-
+*.bat
 web_broker.py
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -10,7 +12,7 @@ __pycache__/
 *$py.class
 *.csv
 *.json
-.env
+
 .ipynb
 # C extensions
 *.so
