@@ -145,7 +145,7 @@ async def process_auto_hedge():
 
             direction = 1 if action == "buy" else -1
 
-            max_retries = 1
+            max_retries = 3
             retry_count = 0
             order_id = None
             status = "EXECUTING"

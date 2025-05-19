@@ -64,12 +64,13 @@ class BitgetOrderSender:
 
     async def send_order(self, ticker, direction, hedge_qty, price=None):
         """
-        Send a single order to Bitget using leeway algorithm with a $1000 threshold
+        Send a single order to Bitget using leeway algorithm with a $1000 threshold,
+        and fail fast if the HTTP endpoint is unreachable.
         """
         print("DEBUG: Entering send_order method", flush=True)
         order_id = str(uuid.uuid4())
         direction_str = 'BUY' if direction > 0 else 'SELL'
-        
+
         symbol, factor = self.broker_handler.symbol_to_market_with_factor(ticker, universal=False)
         target_quantity = hedge_qty * factor
 
@@ -78,18 +79,17 @@ class BitgetOrderSender:
             if price is None:
                 self.logger.warning(f"Using full quantity as max_order_size due to missing price")
                 print(f"Warning: Could not fetch price for {ticker}", flush=True)
-        
+
         if price is not None:
             price /= factor
 
         qty = self.broker_handler.get_contract_qty_from_coin(ticker, target_quantity)
         self.logger.info(f'Converted {target_quantity} {ticker} to {qty} contracts')
-
         print("DEBUG: Before detailed output", flush=True)
 
         child_order_delay = 1000 * np.random.uniform(0.2, 1)
         max_alive_order_time = 1000 * np.random.uniform(5, 8)
-        
+
         if price is None:
             max_order_size = qty
             amount = None
@@ -123,7 +123,7 @@ class BitgetOrderSender:
             'maxRetryAsLimitOrder': 10,
             'marginMode': 'ISOLATED'
         }
-        
+
         request = {
             'clientOrderId': order_id,
             'orderMsg': 0,
@@ -143,28 +143,37 @@ class BitgetOrderSender:
         print(json.dumps(request, indent=2), flush=True)
 
         print("DEBUG: Before dummy check", flush=True)
-        
         if self.broker_handler._destination == 'dummy':
             self.logger.info(f"Dummy order: {symbol} {direction_str} {qty} contracts (ID: {order_id})")
             print(f"Dummy order: {symbol} {direction_str} {qty} contracts (ID: {order_id})", flush=True)
             return True, request
-        
-        self.logger.info(f"Sending order: {symbol} {direction_str} {qty} contracts perspectivas chunk: {max_order_size})")
+
+        # === REAL SEND: wrap the HTTP call in a 5s timeout ===
         try:
-            response = await self._post_request(self.AMAZON_UPI_SINGLE, request)
-            if response['status_code'] != 200:
-                self.logger.error(f"Order failed: {response['status_code']} - {response['text']}")
-                print(f"Order failed: {response['status_code']} - {response['text'].decode()}", flush=True)
-                return False, request
-                
-            self.logger.info(f"Order successfully submitted: {order_id}")
-            print(f"Order successfully submitted: {order_id}", flush=True)
-            return True, request
-            
-        except Exception as e:
-            self.logger.error(f"Error sending order: {str(e)}")
-            print(f"Error sending order: {str(e)}", flush=True)
+            response = await asyncio.wait_for(
+                self._post_request(self.AMAZON_UPI_SINGLE, request),
+                timeout=10.0
+            )
+        except asyncio.TimeoutError:
+            self.logger.error(f"Order request to {self.AMAZON_UPI_SINGLE} timed out")
+            print("Error sending order: HTTP request timed out", flush=True)
             return False, request
+        except Exception as e:
+            self.logger.error(f"Error sending order: {e}")
+            print(f"Error sending order: {e}", flush=True)
+            return False, request
+
+        # === HANDLE RESPONSE ===
+        if response.get('status_code') != 200:
+            code = response.get('status_code')
+            txt = response.get('text', b'').decode(errors='ignore')
+            self.logger.error(f"Order failed: {code} - {txt}")
+            print(f"Order failed: {code} - {txt}", flush=True)
+            return False, request
+
+        self.logger.info(f"Order successfully submitted: {order_id}")
+        print(f"Order successfully submitted: {order_id}", flush=True)
+        return True, request
 
     async def close(self):
         """Close the exchange connection"""
@@ -178,10 +187,10 @@ async def test_order_sender():
     params = {
         'exchange_trade': 'bitget',
         'account_trade': 'hedge1',
-        'send_orders': 'bitget'
+        'send_orders': 'bitget'  # Change from 'dummy' to 'bitget' or remove this key
     }
     
-    end_point = BrokerHandler.build_end_point('bitget', account='H1')
+    end_point = BrokerHandler.build_end_point('bitget', account='H1')  # 'H1' matches BITGET_HEDGE1_API_KEY
     bh = BrokerHandler(
         market_watch='bitget',
         strategy_param=params,
@@ -196,7 +205,7 @@ async def test_order_sender():
         # Test parameters
         ticker = 'ETHUSDT'
         direction = 1  # Buy
-        hedge_qty = 0.3
+        hedge_qty = 0.3  # 0.5 ETH
         
         # Send the order to the real execution machine
         success, request = await order_sender.send_order(ticker, direction, hedge_qty)

@@ -57,7 +57,8 @@ class HedgeActions:
                 toast(f"Invalid quantity for {token}", duration=5, color="error")
                 return
 
-            result = await execute_hedge_trade(token, signed_quantity, self.order_sender)
+            task = asyncio.create_task(execute_hedge_trade(token, signed_quantity, self.order_sender))
+            result = await task
             
             if result['success']:
                 put_markdown(f"### Custom Hedge Order Request for {result['token']} ({action.capitalize()} {quantity:.5f})")
