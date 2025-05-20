@@ -4,8 +4,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
-
 # Load environment variables
 ROOT_DIR = Path(os.getenv('ROOT_DIR', os.getcwd())).resolve()
 LOG_DIR = Path(os.getenv('LP_HEDGE_LOG_DIR', ROOT_DIR / 'logs')).resolve()

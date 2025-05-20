@@ -1,19 +1,34 @@
 import logging
+import os
 from datetime import datetime
 import pandas as pd
 from pathlib import Path
 from pywebio.output import put_markdown, put_code, toast
 import asyncio
 import json
+from telegram import Bot
+from telegram.error import TelegramError
 from common.utils import execute_hedge_trade
 from common.path_config import HEDGING_LATEST_CSV, MANUAL_ORDER_MONITOR_CSV, ORDER_HISTORY_CSV
 from hedge_automation.ws_manager import ws_manager
+from dotenv import load_dotenv
+from hedge_automation.bot_reporting import TGMessenger  # adjust path if needed
+import aiohttp
+
+
+load_dotenv()
 
 logger = logging.getLogger('hedge_execution')
 
-async def send_telegram_alert(message):
-    """Placeholder for sending Telegram alerts."""
-    logger.warning(f"TELEGRAM ALERT PLACEHOLDER: {message}")
+def send_telegram_alert(message):
+    """Send alert message to configured Telegram channel."""
+    print(f"Sending alert: {message}")
+    try:
+        response = TGMessenger.send(message, 'LP eagle') 
+        if isinstance(response, dict) and not response.get("ok", False):
+            logger.error(f"Telegram response error: {response}")
+    except Exception as e:
+        logger.error(f"Telegram alert failed: {e}")
 
 async def append_to_order_history(order_data, source):
     """Append a resolved order to order_history.csv."""
@@ -102,7 +117,7 @@ class HedgeActions:
                 f"Status: SUBMISSION_ERROR\n"
                 f"Error: {error_message}"
             )
-            await send_telegram_alert(error_alert)
+            send_telegram_alert(error_alert)
             if MANUAL_ORDER_MONITOR_CSV.exists():
                 df = pd.read_csv(MANUAL_ORDER_MONITOR_CSV)
                 mask = df["orderId"] == order_id

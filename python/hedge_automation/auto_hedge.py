@@ -9,6 +9,8 @@ from common.data_loader import load_data
 from hedge_automation.order_manager import OrderManager
 from common.utils import execute_hedge_trade
 from hedge_automation.ws_manager import ws_manager
+from hedge_automation.bot_reporting import TGMessenger  
+import aiohttp
 
 # Configure logging
 logging.basicConfig(
@@ -25,9 +27,15 @@ logger = logging.getLogger(__name__)
 order_manager = OrderManager()
 order_sender = order_manager.get_order_sender()
 
-async def send_telegram_alert(message):
-    """Placeholder for sending Telegram alerts."""
-    logger.warning(f"TELEGRAM ALERT PLACEHOLDER: {message}")
+def send_telegram_alert(message):
+    """Send alert message to configured Telegram channel."""
+    print(f"Sending alert: {message}")
+    try:
+        response = TGMessenger.send(message, 'LP eagle') 
+        if isinstance(response, dict) and not response.get("ok", False):
+            logger.error(f"Telegram response error: {response}")
+    except Exception as e:
+        logger.error(f"Telegram alert failed: {e}")
 
 async def append_to_order_history(order_data, source):
     """Append a resolved order to order_history.csv."""
@@ -216,7 +224,7 @@ async def process_auto_hedge():
                             f"Status: {status}\n"
                             f"Error: {error_message}"
                         )
-                        await send_telegram_alert(error_alert)
+                        send_telegram_alert(error_alert)
                         if AUTOMATIC_ORDER_MONITOR_CSV.exists():
                             df = pd.read_csv(AUTOMATIC_ORDER_MONITOR_CSV)
                             mask = (df["Token"] == token) & (df["Rebalance Action"] == action)
