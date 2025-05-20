@@ -84,7 +84,10 @@ HEDGABLE_TOKENS = {
     },
     "HOUSEUSDT": {
         "solana": ["DitHyRMQiSDhn5cnKMJV2CDDt6sVct96YrECiM49pump"]
-    }
+    },
+    "RAYUSDT": {
+        "solana": ["4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"]
+    },
 }
 
 # map between onchain and bitget tickers 
