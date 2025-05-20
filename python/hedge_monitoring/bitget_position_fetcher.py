@@ -9,6 +9,7 @@ import logging
 import json
 from pathlib import Path
 from common.path_config import LOG_DIR, HEDGING_HISTORY_CSV, HEDGING_LATEST_CSV
+from common.bot_reporting import TGMessenger
 
 # Configure logging
 logging.basicConfig(
@@ -106,6 +107,20 @@ async def fetch_and_print_positions():
             # Fetch current funding rate
             funding_rate = await fetch_4hr_funding_rate(market, symbol)
             
+            # Send alert if funding rate is less than -10 bips
+            if funding_rate * 10000 <= -9: 
+                try:
+                    alert_msg = (
+                        f"⚠️ Bitget Funding Rate Alert ⚠️\n"
+                        f"Symbol: {symbol}\n"
+                        f"Funding Rate: {funding_rate* 10000:.1f} bips\n"
+                        f"Hedge position USD amount: {(amount):.2f}\n"
+                    )
+                    TGMessenger.send(alert_msg, 'LP eagle') 
+                except Exception as e:
+                    logger.error(f"Failed to send Telegram alert for {symbol}: {e}")
+
+
             position_data.append({
                 "timestamp": current_time,
                 "symbol": symbol,

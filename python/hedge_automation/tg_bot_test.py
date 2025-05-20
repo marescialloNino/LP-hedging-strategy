@@ -3,7 +3,7 @@ from telegram import Bot
 from telegram.error import TelegramError
 import os
 from hedge_automation.ws_manager import ws_manager
-from hedge_automation.bot_reporting import TGMessenger  
+from common.bot_reporting import TGMessenger  
 
 
 async def test_bot():

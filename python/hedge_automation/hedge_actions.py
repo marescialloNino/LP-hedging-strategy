@@ -12,7 +12,7 @@ from common.utils import execute_hedge_trade
 from common.path_config import HEDGING_LATEST_CSV, MANUAL_ORDER_MONITOR_CSV, ORDER_HISTORY_CSV
 from hedge_automation.ws_manager import ws_manager
 from dotenv import load_dotenv
-from hedge_automation.bot_reporting import TGMessenger  # adjust path if needed
+from common.bot_reporting import TGMessenger  # adjust path if needed
 import aiohttp
 
 

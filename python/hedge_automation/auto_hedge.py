@@ -9,7 +9,7 @@ from common.data_loader import load_data
 from hedge_automation.order_manager import OrderManager
 from common.utils import execute_hedge_trade
 from hedge_automation.ws_manager import ws_manager
-from hedge_automation.bot_reporting import TGMessenger  
+from common.bot_reporting import TGMessenger  
 import aiohttp
 
 # Configure logging
