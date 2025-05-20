@@ -130,7 +130,7 @@ class BitgetOrderSender:
             'manualOrderConfiguration': config
         }
 
-        # Print statements NOW, after all variables are defined
+        # Print statements after all variables are defined
         print("\n=== Sending Order ===", flush=True)
         print(f"Ticker: {ticker}", flush=True)
         print(f"Direction: {direction_str}", flush=True)
@@ -142,13 +142,12 @@ class BitgetOrderSender:
         print("\nPOST Request:", flush=True)
         print(json.dumps(request, indent=2), flush=True)
 
-        print("DEBUG: Before dummy check", flush=True)
         if self.broker_handler._destination == 'dummy':
             self.logger.info(f"Dummy order: {symbol} {direction_str} {qty} contracts (ID: {order_id})")
             print(f"Dummy order: {symbol} {direction_str} {qty} contracts (ID: {order_id})", flush=True)
             return True, request
 
-        # === REAL SEND: wrap the HTTP call in a 5s timeout ===
+        # === REAL SEND: wrap the HTTP call in a 10s timeout ===
         try:
             response = await asyncio.wait_for(
                 self._post_request(self.AMAZON_UPI_SINGLE, request),
@@ -179,46 +178,3 @@ class BitgetOrderSender:
         """Close the exchange connection"""
         await self.broker_handler.close_exchange_async()
 
-async def test_order_sender():
-    # Configure logging
-    logging.basicConfig(level=logging.INFO)
-    
-    # Set up BrokerHandler for Bitget in real mode
-    params = {
-        'exchange_trade': 'bitget',
-        'account_trade': 'hedge1',
-        'send_orders': 'bitget'  # Change from 'dummy' to 'bitget' or remove this key
-    }
-    
-    end_point = BrokerHandler.build_end_point('bitget', account='H1')  # 'H1' matches BITGET_HEDGE1_API_KEY
-    bh = BrokerHandler(
-        market_watch='bitget',
-        strategy_param=params,
-        end_point_trade=end_point,
-        logger_name='bitget_order_sender'
-    )
-    
-    # Create order sender
-    order_sender = BitgetOrderSender(bh)
-    
-    try:
-        # Test parameters
-        ticker = 'ETHUSDT'
-        direction = 1  # Buy
-        hedge_qty = 0.3  # 0.5 ETH
-        
-        # Send the order to the real execution machine
-        success, request = await order_sender.send_order(ticker, direction, hedge_qty)
-        print(f"\nTest completed with result: Success={success}, Request={request}")
-        
-        if success:
-            print("Order sent successfully to the execution machine!")
-        else:
-            print("Failed to send order. Check logs for details.")
-    
-    finally:
-        # Cleanup
-        await order_sender.close()
-
-if __name__ == "__main__":
-    asyncio.run(test_order_sender())
