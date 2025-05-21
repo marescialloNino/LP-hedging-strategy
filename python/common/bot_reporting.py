@@ -87,6 +87,3 @@ class TGMessenger:
         message = f'{comment} for {s1}/{s2}'#: {direction}@{spread}, p1={p1},p2={p2}'
 
         return await TGMessenger.send_async(session, message, chat_channel)
-
-
-
