@@ -177,14 +177,5 @@ def cleanup():
 
 atexit.register(cleanup)
 
-def main_sync():
-    # Run your async main() inside each new PyWebIO session thread
-    asyncio.run(main())
-
 if __name__ == "__main__":
-    start_server(
-        main_sync, 
-        port=8073, 
-        host="0.0.0.0", 
-        debug=True
-    )
+    start_server(main, port=8073, host="0.0.0.0", debug=True)
