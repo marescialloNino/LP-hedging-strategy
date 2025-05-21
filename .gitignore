@@ -1,6 +1,7 @@
 node_modules
 /logs
 /lp-data
+*.bat
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
