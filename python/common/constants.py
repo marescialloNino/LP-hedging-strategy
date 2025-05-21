@@ -63,12 +63,12 @@ HEDGABLE_TOKENS = {
     "ARBUSDT": {
         "arbitrum": ["0x912ce59144191c1204e64559fe8253a0e49e6548"]
     },
-    "GAMEUSDT": {
-        "base": ["0x1c4cca7c5db003824208adda61bd749e55f463a3"]
-    },
     # Solana
     "SOLUSDT": {
         "solana": ["So11111111111111111111111111111111111111112"]
+    },
+    "LAUNCHCOINUSDT": {
+        "solana": ["Ey59PH7Z4BFU4HjyKnyMdWt5GGN76KazTAwQihoUXRnk"]
     },
     "GRIFFAINUSDT": {
         "solana": ["KENJSUYLASHUMfHyy5o4Hp2FdNqZg1AsUPhfH2kYvEP"]
@@ -84,7 +84,10 @@ HEDGABLE_TOKENS = {
     },
     "HOUSEUSDT": {
         "solana": ["DitHyRMQiSDhn5cnKMJV2CDDt6sVct96YrECiM49pump"]
-    }
+    },
+    "RAYUSDT": {
+        "solana": ["4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"]
+    },
 }
 
 # map between onchain and bitget tickers 
