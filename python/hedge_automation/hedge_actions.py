@@ -97,9 +97,13 @@ class HedgeActions:
             await update_manual_order_monitor_csv(order_data)
             logger.info(f"Order {order_id} for {token} marked as EXECUTING")
             
-            # Start or reuse listener and subscribe order
-            await ws_manager.start_listener()
-            await ws_manager.subscribe_order(order_data)
+            try:
+                # Start or reuse listener and subscribe order
+                await ws_manager.start_listener()
+                await ws_manager.subscribe_order(order_data)
+                logger.info("WebSocket listener started successfully")
+            except Exception as e:
+                logger.warning(f"Failed to start WebSocket listener: {e}. Order will not be monitored.")        
             
             put_markdown(f"### Hedge Order Request for {result['token']}")
             put_code(json.dumps(result['request'], indent=2), language='json')

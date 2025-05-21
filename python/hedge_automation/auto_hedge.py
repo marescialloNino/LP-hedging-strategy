@@ -90,7 +90,7 @@ async def build_auto_orders():
         for _, row in df.iterrows():
             if row.get("Auto Hedge", False) and row.get("Trigger Auto Order", False) and float(row["Rebalance Value"]) > 0:
                 order_data.append({
-                    "Timestamp":  datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "Token": row["Token"],
                     "Rebalance Action": row["Rebalance Action"],
                     "Rebalance Value": float(row["Rebalance Value"]),
@@ -149,6 +149,30 @@ async def process_auto_hedge():
             quantity = float(row["Rebalance Value"])
             current_status = row["status"]
 
+            # Check for existing successful order
+            if current_status == "EXECUTING" and pd.notna(row["orderId"]):
+                logger.info(f"Order for {token} already submitted with ID {row['orderId']}, skipping")
+                # Attempt to subscribe if not already subscribed
+                try:
+                    await ws_manager.subscribe_order({
+                        "Token": token,
+                        "Rebalance Action": action,
+                        "Rebalance Value": quantity,
+                        "orderId": row["orderId"],
+                        "status": current_status,
+                        "fillPercentage": row["fillPercentage"]
+                    })
+                    logger.info(f"Successfully subscribed to existing order {row['orderId']} for {token}")
+                except Exception as sub_e:
+                    logger.warning(f"Failed to subscribe to existing order {row['orderId']} for {token}: {sub_e}. Order is not being monitored.")
+                    send_telegram_alert(
+                        f"Auto Order Monitoring Warning:\n"
+                        f"Token: {token}\n"
+                        f"Order ID: {row['orderId']}\n"
+                        f"Warning: Failed to subscribe to WebSocket: {sub_e}. Order is not being monitored."
+                    )
+                continue
+
             if current_status != "RECEIVED":
                 logger.info(f"Skipping order for {token}: status is {current_status}")
                 continue
@@ -164,14 +188,22 @@ async def process_auto_hedge():
                     logger.info(f"Attempting order for {token}: {action} {quantity:.5f} (Attempt {retry_count + 1})")
                     result = await execute_hedge_trade(token, quantity * direction, order_sender)
                     
+                    logger.info(f"Order submission result for {token}: {result}")
                     order_id = result['request']['clientOrderId'] if 'request' in result and 'clientOrderId' in result['request'] else ""
                     if not order_id:
                         logger.warning(f"No clientOrderId in result for {token}: {result}")
+                        send_telegram_alert(
+                            f"Auto Order Warning:\n"
+                            f"Token: {token}\n"
+                            f"Action: {action}\n"
+                            f"Quantity: {quantity:.5f}\n"
+                            f"Warning: No clientOrderId in result: {result}"
+                        )
                     
                     if result['success']:
-                        logger.info(f"Order sent for {token}: Order ID {order_id}")
+                        logger.info(f"Order successfully submitted for {token}: Order ID {order_id}")
                         order_data = {
-                            "Timestamp":  datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "Token": token,
                             "Rebalance Action": action,
                             "Rebalance Value": quantity,
@@ -181,11 +213,23 @@ async def process_auto_hedge():
                         }
                         await update_order_monitor_csv(order_data)
                         
-                        # Subscribe order
-                        await ws_manager.subscribe_order(order_data)
-                        break
+                        # Attempt WebSocket subscription
+                        try:
+                            await ws_manager.start_listener()  # Ensure listener is running
+                            await ws_manager.subscribe_order(order_data)
+                            logger.info(f"Successfully subscribed to order {order_id} for {token}")
+                        except Exception as sub_e:
+                            logger.warning(f"Failed to subscribe to order {order_id} for {token}: {sub_e}. Order is not being monitored.")
+                            send_telegram_alert(
+                                f"Auto Order Monitoring Warning:\n"
+                                f"Token: {token}\n"
+                                f"Order ID: {order_id}\n"
+                                f"Warning: Failed to subscribe to WebSocket: {sub_e}. Order is not being monitored."
+                            )
+                        break  # Exit retry loop since order was successfully submitted
                     else:
-                        raise Exception("Order submission failed")
+                        logger.warning(f"Order submission failed for {token}: {result}")
+                        raise Exception(f"Order submission failed: {result.get('error', 'Unknown error')}")
 
                 except Exception as e:
                     retry_count += 1
@@ -193,7 +237,7 @@ async def process_auto_hedge():
                     logger.error(f"Failed to send order for {token}: {error_message}")
                     if retry_count < max_retries:
                         order_data = {
-                            "Timestamp":  datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "Token": token,
                             "Rebalance Action": action,
                             "Rebalance Value": quantity,
@@ -207,7 +251,7 @@ async def process_auto_hedge():
                         status = "SUBMISSION_ERROR"
                         logger.error(f"Max retries reached for {token}, marking as SUBMISSION_ERROR")
                         order_data = {
-                            "Timestamp":  datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "Token": token,
                             "Rebalance Action": action,
                             "Rebalance Value": quantity,
@@ -239,13 +283,20 @@ async def process_auto_hedge():
 
     except Exception as e:
         logger.error(f"Error processing auto-hedge: {e}")
+        send_telegram_alert(f"Auto-Hedge Process Error:\nError: {str(e)}")
 
 async def main():
     """Main function to run auto-hedge."""
     try:
+        # Start WebSocket listener
+        try:
+            await ws_manager.start_listener()
+            logger.info("WebSocket listener started successfully")
+        except Exception as e:
+            logger.warning(f"Failed to start WebSocket listener: {e}. Orders will not be monitored.")        
         await process_auto_hedge()
     except Exception as e:
-        logger.error(f"Main error: {e}")
+        logger.error(f"Main error: {e}")   
     finally:
         await ws_manager.stop_listener()
         await order_manager.close()
