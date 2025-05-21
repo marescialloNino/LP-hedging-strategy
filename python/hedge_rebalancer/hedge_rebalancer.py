@@ -90,7 +90,7 @@ def calculate_lp_quantities():
     
     return lp_quantities
 
-def check_hedge_rebalance(positive_trigger=0.2, negative_trigger=-0.4):
+def check_hedge_rebalance(positive_trigger=0.1, negative_trigger=-0.1):
     """Compare LP quantities with absolute hedge quantities and output results."""
     logger.info(f"Starting hedge-rebalancer with positive_trigger={positive_trigger}, negative_trigger={negative_trigger}...")
     

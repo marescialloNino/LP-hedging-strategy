@@ -115,6 +115,8 @@ async def build_auto_orders():
 async def process_auto_hedge():
     """Process auto-hedge actions from automatic_order_monitor.csv."""
     logger.info("Starting auto-hedge process...")
+
+    send_telegram_alert("Starting auto-hedge process...")
     
     data = load_data()
     error_flags = data['error_flags']
