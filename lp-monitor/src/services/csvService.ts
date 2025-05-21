@@ -11,7 +11,51 @@ const KRYSTAL_LATEST_CSV_PATH = path.join(PROJECT_ROOT, 'lp-data', 'LP_krystal_p
 const KRYSTAL_HISTORY_CSV_PATH = path.join(PROJECT_ROOT, 'lp-data', 'LP_krystal_positions_history.csv');
 const LIQUIDITY_PROFILE_CSV_PATH = path.join(PROJECT_ROOT, 'lp-data', 'meteora_liquidity_profile.csv');
 
-async function writeCSV<T extends Record<string, any>>(filePath: string, records: T[], headers: { id: string; title: string }[], append: boolean = true): Promise<void> {
+/**
+ * Ensure the directory for `filePath` exists.
+ */
+function ensureDirExists(filePath: string) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+/**
+ * If `filePath` does not yet exist, create it with only the header row.
+ */
+async function ensureCsvFile(
+  filePath: string,
+  headers: { id: string; title: string }[]
+) {
+  if (!fs.existsSync(filePath)) {
+    const writer = createObjectCsvWriter({
+      path: filePath,
+      header: headers,
+      append: false
+    });
+    await writer.writeRecords([]);  // writes just the header row
+    console.info(`Initialized CSV ${filePath} with headers: ${headers.map(h => h.title).join(', ')}`);
+  }
+}
+
+/**
+ * Generic CSV writer that bootstraps its own directory and header row.
+ */
+async function writeCSV<T extends Record<string, any>>(
+  filePath: string,
+  records: T[],
+  headers: { id: string; title: string }[],
+  append: boolean = true
+): Promise<void> {
+  // 1) ensure parent folder exists
+  ensureDirExists(filePath);
+
+  // 2) if appending, make sure file is bootstrapped
+  if (append) {
+    await ensureCsvFile(filePath, headers);
+  }
+
   const csvWriter = createObjectCsvWriter({
     path: filePath,
     header: headers,
