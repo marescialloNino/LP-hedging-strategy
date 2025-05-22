@@ -9,16 +9,32 @@ class WebSocketManager:
     def __init__(self):
         self.listener = None
         self.active_orders = set()
-        self.order_timeouts = {}  # {order_id: {'timeout': float, 'start_time': float}}
+        self.order_timeouts = {}
         self.task = None
         self.order_statuses = []
         self.update_callback = None
+
+    async def initialize_listener(self):
+        """Initialize WebSocket listener with retries."""
+        for attempt in range(3):
+            try:
+                self.listener = WebSpreaderListener(logger)
+                logger.info("WebSocket listener initialized")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to initialize WebSocket listener (attempt {attempt + 1}): {e}")
+                if attempt < 2:
+                    await asyncio.sleep(2)
+        logger.error("Failed to initialize WebSocket listener after 3 attempts")
+        return False
 
     async def start_listener(self, update_callback):
         """Start the WebSocket listener if not running."""
         if self.task is None:
             logger.info("Starting WebSocket listener")
-            self.listener = WebSpreaderListener(logger)
+            if not await self.initialize_listener():
+                logger.error("Cannot start listener: initialization failed")
+                return None
             self.update_callback = update_callback
             self.task = asyncio.create_task(self.monitor_orders())
         return self.task
@@ -30,16 +46,24 @@ class WebSocketManager:
             logger.info(f"Order {order_id} already subscribed")
             return
 
-        self.active_orders.add(order_id)
-        self.listener.subscribe(order_id)
-        logger.info(f"Subscribed to order: {order_id}")
+        if self.listener is None or not self.listener._connected:
+            logger.warning(f"WebSocket listener not connected, attempting to reinitialize for order {order_id}")
+            if not await self.initialize_listener():
+                raise Exception("WebSocket listener initialization failed")
 
-        # Calculate max execution time
+        try:
+            self.listener.subscribe(order_id)
+            self.active_orders.add(order_id)
+            logger.info(f"Subscribed to order: {order_id}")
+        except Exception as e:
+            logger.error(f"Failed to subscribe order {order_id}: {e}")
+            raise
+
         result = self.listener.get_strat_result(order_id)
         if not result:
             await asyncio.sleep(1)
             result = self.listener.get_strat_result(order_id)
-        max_time = 1800  # Default 30 minutes
+        max_time = 1800
         if result:
             target_size = result.get('targetSize', 0)
             max_order_size = result.get('maxOrderSize', 0)
@@ -60,6 +84,12 @@ class WebSocketManager:
         """Monitor subscribed orders until all resolve."""
         try:
             while self.active_orders:
+                if self.listener is None or not self.listener._connected:
+                    logger.error("WebSocket listener disconnected, attempting to reinitialize")
+                    if not await self.initialize_listener():
+                        logger.error("WebSocket listener reinitialization failed")
+                        break
+
                 for order_id in list(self.active_orders):
                     result = self.listener.get_strat_result(order_id)
                     if not result:
@@ -89,14 +119,8 @@ class WebSocketManager:
                         self.order_timeouts.pop(order_id, None)
                         logger.info(f"Order {order_id} resolved: {status}")
                 
-                if self.listener.results['errors']:
-                    error_msg = "\n".join(self.listener.results['errors'])
-                    logger.error(f"WebSocket errors: {error_msg}")
-                    break
-                
-                await asyncio.sleep(30)  # Poll every 30 seconds
+                await asyncio.sleep(30)
             
-            # Generate summary
             summary = {
                 "Total Orders": len(self.order_statuses),
                 "Received": sum(1 for o in self.order_statuses if o["status"] == "RECEIVED"),
@@ -112,12 +136,7 @@ class WebSocketManager:
         except Exception as e:
             logger.error(f"WebSocket listener error: {str(e)}")
         finally:
-            if self.listener:
-                await self.listener.stop_listener()
-                self.listener = None
-                self.task = None
-                logger.info("WebSocket listener stopped")
-                self.order_statuses = []
+            await self.stop_listener()
 
     async def stop_listener(self):
         """Stop the WebSocket listener if running."""
