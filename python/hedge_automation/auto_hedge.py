@@ -68,12 +68,15 @@ async def update_order_monitor_csv(order_data, is_manual=False):
     try:
         if csv_file.exists():
             df = pd.read_csv(csv_file)
-            mask = (df["Token"] == order_data["Token"]) & (df["Rebalance Action"] == order_data["Rebalance Action"]) & (df["orderId"] == order_data["orderId"])
+            # Match by Token and Rebalance Action only
+            mask = (df["Token"] == order_data["Token"]) & (df["Rebalance Action"] == order_data["Rebalance Action"])
             if mask.any():
+                # Update existing row
                 for key, value in order_data.items():
                     if key in headers:
                         df.loc[mask, key] = value
             else:
+                # Add new row
                 df = pd.concat([df, pd.DataFrame([order_data], columns=headers)], ignore_index=True)
         else:
             df = pd.DataFrame([order_data], columns=headers)
@@ -88,7 +91,7 @@ async def remove_from_order_monitor(order_data, is_manual=False):
     try:
         if csv_file.exists():
             df = pd.read_csv(csv_file)
-            mask = (df["Token"] == order_data["Token"]) & (df["Rebalance Action"] == order_data["Rebalance Action"]) & (df["orderId"] == order_data["orderId"])
+            mask = (df["Token"] == order_data["Token"]) & (df["Rebalance Action"] == order_data["Rebalance Action"])
             if mask.any():
                 df = df[~mask]
                 df.to_csv(csv_file, index=False)
@@ -127,6 +130,8 @@ async def build_auto_orders():
 
         if order_data:
             order_df = pd.DataFrame(order_data)
+            # Remove duplicates, keeping the latest entry
+            order_df = order_df.drop_duplicates(subset=["Token", "Rebalance Action"], keep="last")
             order_df.to_csv(AUTOMATIC_ORDER_MONITOR_CSV, index=False)
             logger.info(f"Generated {AUTOMATIC_ORDER_MONITOR_CSV} with {len(order_data)} orders")
             return True
@@ -220,6 +225,11 @@ async def process_auto_hedge():
             logger.info("No orders available in automatic_order_monitor.csv.")
             return
 
+        # Remove duplicates, keeping the latest entry
+        df = df.drop_duplicates(subset=["Token", "Rebalance Action"], keep="last")
+        df.to_csv(AUTOMATIC_ORDER_MONITOR_CSV, index=False)
+        logger.info(f"Cleaned duplicates in {AUTOMATIC_ORDER_MONITOR_CSV}")
+
         # Start WebSocket listener if not already running
         if not ws_manager.task:
             await ws_manager.start_listener(handle_order_update)
@@ -274,6 +284,18 @@ async def process_auto_hedge():
             order_id = None
             status = "EXECUTING"
 
+            # Initialize order_data for retries
+            order_data = {
+                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Token": token,
+                "Rebalance Action": action,
+                "Rebalance Value": quantity,
+                "orderId": order_id or "",
+                "status": status,
+                "fillPercentage": 0.0
+            }
+            await update_order_monitor_csv(order_data)
+
             while retry_count < max_retries:
                 try:
                     logger.info(f"Attempting order for {token}: {action} {quantity:.6f} (Attempt {retry_count + 1})")
@@ -300,15 +322,12 @@ async def process_auto_hedge():
                             f"Quantity: {quantity:.5f}\n"
                             f"Action: {action}"
                         )
-                        order_data = {
+                        order_data.update({
                             "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "Token": token,
-                            "Rebalance Action": action,
-                            "Rebalance Value": quantity,
                             "orderId": order_id,
                             "status": status,
                             "fillPercentage": 0.0
-                        }
+                        })
                         await update_order_monitor_csv(order_data)
                         
                         # Attempt WebSocket subscription
@@ -340,29 +359,23 @@ async def process_auto_hedge():
                     error_message = str(e)
                     logger.error(f"Failed to send order for {token}: {error_message}")
                     if retry_count < max_retries:
-                        order_data = {
+                        order_data.update({
                             "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "Token": token,
-                            "Rebalance Action": action,
-                            "Rebalance Value": quantity,
-                            "orderId": order_id,
-                            "status": "RECEIVED",
+                            "orderId": order_id or "",
+                            "status": "EXECUTING",
                             "fillPercentage": 0.0
-                        }
+                        })
                         await update_order_monitor_csv(order_data)
                         await asyncio.sleep(1)
                     else:
                         status = "SUBMISSION_ERROR"
                         logger.error(f"Max retries reached for {token}, marking as SUBMISSION_ERROR")
-                        order_data = {
+                        order_data.update({
                             "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "Token": token,
-                            "Rebalance Action": action,
-                            "Rebalance Value": quantity,
                             "orderId": order_id or "N/A",
                             "status": status,
                             "fillPercentage": 0.0
-                        }
+                        })
                         await send_telegram_alert(
                             f"Auto Order Error Alert:\n"
                             f"Token: {token}\n"
