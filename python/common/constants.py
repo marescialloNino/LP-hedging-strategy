@@ -84,6 +84,9 @@ HEDGABLE_TOKENS = {
     },
     "HOUSEUSDT": {
         "solana": ["DitHyRMQiSDhn5cnKMJV2CDDt6sVct96YrECiM49pump"]
+    },
+    "LAUNCHCOINUSDT": {
+        "solana": ["Ey59PH7Z4BFU4HjyKnyMdWt5GGN76KazTAwQihoUXRnk"]
     }
 }
 

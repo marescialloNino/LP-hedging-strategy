@@ -3,12 +3,13 @@ import logging
 import sys
 import csv
 from datetime import datetime
+import json
+from pathlib import Path
 from common.constants import HEDGABLE_TOKENS
 from common.path_config import (
     LOG_DIR, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGING_LATEST_CSV,
-    REBALANCING_HISTORY_DIR, REBALANCING_LATEST_CSV
+    REBALANCING_HISTORY_DIR, REBALANCING_LATEST_CSV, CONFIG_DIR
 )
-from ui.table_renderer import load_auto_hedge_tokens
 
 # Configure logging
 logging.basicConfig(
@@ -20,6 +21,91 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+AUTO_HEDGE_TOKENS_PATH = CONFIG_DIR / "auto_hedge_tokens.json"
+
+def load_auto_hedge_tokens():
+    """
+    Load tokens' automation status from auto_hedge_tokens.json.
+    If the file doesn't exist, initialize it with all hedgeable tokens set to false.
+    Returns: dict of token symbols to automation status (e.g., {"ETH": false, "BTC": false}).
+    """
+    try:
+        if AUTO_HEDGE_TOKENS_PATH.exists():
+            with AUTO_HEDGE_TOKENS_PATH.open('r') as f:
+                content = f.read().strip()
+                if not content:
+                    raise ValueError("File is empty")
+                data = json.loads(content)
+                return data
+        else:
+            # Initialize with all hedgeable tokens set to false
+            data = sync_auto_hedge_tokens()
+            return data
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error(f"Error loading auto_hedge_tokens.json: {e}")
+        # Initialize with defaults on error
+        data = sync_auto_hedge_tokens()
+        return data
+
+def save_auto_hedge_tokens(tokens):
+    """
+    Save token automation status to auto_hedge_tokens.json.
+    Args:
+        tokens: dict of token symbols to automation status (e.g., {"ETH": false, "BTC": true}).
+    """
+    try:
+        CONFIG_DIR.mkdir(exist_ok=True)
+        with AUTO_HEDGE_TOKENS_PATH.open('w') as f:
+            json.dump(tokens, f, indent=2)
+        logger.info("Configuration saved successfully to auto_hedge_tokens.json")
+    except Exception as e:
+        logger.error(f"Error saving auto_hedge_tokens.json: {e}")
+
+def sync_auto_hedge_tokens():
+    """
+    Sync auto_hedge_tokens.json with HEDGABLE_TOKENS, adding new tokens and removing obsolete ones.
+    Returns: Updated dict of token symbols to automation status.
+    """
+    # Load current tokens, if any
+    auto_hedge_tokens = {}
+    if AUTO_HEDGE_TOKENS_PATH.exists():
+        try:
+            with AUTO_HEDGE_TOKENS_PATH.open('r') as f:
+                content = f.read().strip()
+                if content:
+                    auto_hedge_tokens = json.loads(content)
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Error reading auto_hedge_tokens.json during sync: {e}")
+
+    # Get current hedgeable tokens (strip USDT from symbols)
+    hedgable_tokens = sorted([ticker.replace("USDT", "") for ticker in HEDGABLE_TOKENS.keys()])
+    
+    # Track changes
+    added_tokens = []
+    removed_tokens = []
+    
+    # Add new tokens with False status
+    for token in hedgable_tokens:
+        if token not in auto_hedge_tokens:
+            auto_hedge_tokens[token] = False
+            added_tokens.append(token)
+    
+    # Remove obsolete tokens
+    for token in list(auto_hedge_tokens.keys()):
+        if token not in hedgable_tokens:
+            del auto_hedge_tokens[token]
+            removed_tokens.append(token)
+    
+    # Save if updated
+    if added_tokens or removed_tokens:
+        save_auto_hedge_tokens(auto_hedge_tokens)
+        if added_tokens:
+            logger.info(f"Added tokens to auto_hedge_tokens.json: {', '.join(added_tokens)}")
+        if removed_tokens:
+            logger.info(f"Removed tokens from auto_hedge_tokens.json: {', '.join(removed_tokens)}")
+    
+    return auto_hedge_tokens
 
 def calculate_hedge_quantities():
     """Calculate total hedged quantities from Bitget positions by symbol (always negative or zero)."""
@@ -93,6 +179,9 @@ def calculate_lp_quantities():
 def check_hedge_rebalance(positive_trigger=0.1, negative_trigger=-0.1):
     """Compare LP quantities with absolute hedge quantities and output results."""
     logger.info(f"Starting hedge-rebalancer with positive_trigger={positive_trigger}, negative_trigger={negative_trigger}...")
+    
+    # Sync auto_hedge_tokens.json with HEDGABLE_TOKENS before calculations
+    sync_auto_hedge_tokens()
     
     hedge_quantities = calculate_hedge_quantities()
     lp_quantities = calculate_lp_quantities()
