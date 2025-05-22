@@ -12,12 +12,14 @@ class WebSocketManager:
         self.order_timeouts = {}  # {order_id: {'timeout': float, 'start_time': float}}
         self.task = None
         self.order_statuses = []
+        self.update_callback = None
 
-    async def start_listener(self):
+    async def start_listener(self, update_callback):
         """Start the WebSocket listener if not running."""
         if self.task is None:
             logger.info("Starting WebSocket listener")
             self.listener = WebSpreaderListener(logger)
+            self.update_callback = update_callback
             self.task = asyncio.create_task(self.monitor_orders())
         return self.task
 
@@ -48,6 +50,7 @@ class WebSocketManager:
                 num_child_orders = math.ceil(target_size / max_order_size)
                 max_time_ms = (num_child_orders * (max_alive_order_time + child_order_delay) * max_retry) + 10000
                 max_time = max_time_ms / 1000
+                logger.info(f"Order {order_id}: targetSize={target_size}, maxOrderSize={max_order_size}, num_child_orders={num_child_orders}, max_time={max_time}s")
         self.order_timeouts[order_id] = {'timeout': max_time, 'start_time': asyncio.get_event_loop().time()}
         
         self.order_statuses.append(order_data)
@@ -77,6 +80,8 @@ class WebSocketManager:
                         if order_info["orderId"] == order_id:
                             order_info["status"] = status
                             order_info["fillPercentage"] = fill_percentage
+                            if self.update_callback:
+                                await self.update_callback(order_info.copy())
                             break
                     
                     if status in ["SUCCESS", "EXECUTION_ERROR"]:
@@ -112,7 +117,7 @@ class WebSocketManager:
                 self.listener = None
                 self.task = None
                 logger.info("WebSocket listener stopped")
-                self.order_statuses = []  # Clear statuses after shutdown
+                self.order_statuses = []
 
     async def stop_listener(self):
         """Stop the WebSocket listener if running."""
@@ -125,6 +130,7 @@ class WebSocketManager:
             self.active_orders.clear()
             self.order_timeouts.clear()
             self.order_statuses = []
+            self.update_callback = None
             logger.info("WebSocket listener stopped")
 
 ws_manager = WebSocketManager()
