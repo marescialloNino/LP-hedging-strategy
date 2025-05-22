@@ -63,6 +63,9 @@ HEDGABLE_TOKENS = {
     "ARBUSDT": {
         "arbitrum": ["0x912ce59144191c1204e64559fe8253a0e49e6548"]
     },
+    "PENGUUSDT": {
+        "base": ["0x01e6bd233f7021e4f5698a3ae44242b76a246c0a"]
+    },
     # Solana
     "SOLUSDT": {
         "solana": ["So11111111111111111111111111111111111111112"]
