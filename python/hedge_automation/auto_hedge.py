@@ -204,6 +204,12 @@ async def process_auto_hedge():
                     
                     if result['success']:
                         logger.info(f"Order successfully submitted for {token}: Order ID {order_id}")
+                        send_telegram_alert(
+                        f"Order successfully submitted for:\n"
+                        f"Token: {token}\n"
+                        f"Order ID: {order_id}\n"
+                        f"Quantity: {quantity:.5f}, Action: {action}"
+                        )
                         order_data = {
                             "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "Token": token,
