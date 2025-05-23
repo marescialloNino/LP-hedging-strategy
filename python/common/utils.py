@@ -3,8 +3,9 @@ import numpy as np
 import logging
 import asyncio
 import logging
-from common.constants import HEDGABLE_TOKENS
-from common.path_config import HEDGING_LATEST_CSV
+from common.data_loader import load_hedgeable_tokens
+
+HEDGABLE_TOKENS = load_hedgeable_tokens()
 
 async def run_shell_script(script_path):
     logger = logging.getLogger('sheel_script_execution')

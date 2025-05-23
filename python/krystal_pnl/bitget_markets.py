@@ -37,7 +37,7 @@ def build_csv(outfile: str = CSV_FILE) -> None:
         writer.writerow(["ticker"])
         writer.writerows([[t] for t in tickers])
 
-    print(f"✅  Saved {len(tickers)} USDT markets to {os.path.abspath(outfile)}")
+    print(f"✅ Saved {len(tickers)} USDT markets to {os.path.abspath(outfile)}")
 
 
 if __name__ == "__main__":

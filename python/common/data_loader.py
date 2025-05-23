@@ -5,8 +5,9 @@ import os
 from pathlib import Path
 from common.path_config import (
     REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV,
-    METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV, LOG_DIR
+    METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV, LOG_DIR, HEDGEABLE_TOKENS_JSON, ENCOUNTERED_TOKENS_JSON
 )
+
 
 logger = logging.getLogger(__name__)
 
@@ -127,3 +128,50 @@ def load_data():
         'error_flags': error_flags,
         'errors': errors
     }
+
+def load_hedgeable_tokens() -> dict:
+    """Load hedgeable tokens from JSON."""
+    try:
+        if HEDGEABLE_TOKENS_JSON.exists():
+            with HEDGEABLE_TOKENS_JSON.open('r') as f:
+                return json.load(f)
+        else:
+            logger.info(f"{HEDGEABLE_TOKENS_JSON} not found, initializing empty dictionary")
+            return {}
+    except Exception as e:
+        logger.error(f"Error loading hedgeable tokens: {str(e)}")
+        return {}
+
+def load_encountered_tokens() -> dict:
+    """Load encountered tokens from JSON."""
+    try:
+        if ENCOUNTERED_TOKENS_JSON.exists():
+            with ENCOUNTERED_TOKENS_JSON.open('r') as f:
+                return json.load(f)
+        else:
+            logger.info(f"{ENCOUNTERED_TOKENS_JSON} not found, initializing empty dictionary")
+            return {}
+    except Exception as e:
+        logger.error(f"Error loading encountered tokens: {str(e)}")
+        return {}
+
+def load_json(file_path) -> dict:
+    """Load JSON file."""
+    try:
+        if file_path.exists():
+            with file_path.open('r') as f:
+                data = json.load(f)
+                if not isinstance(data, dict):
+                    logger.error(f"Invalid format in {file_path}: Expected dictionary")
+                    return {}
+                logger.debug(f"Loaded: {data}")
+                return data
+        else:
+            logger.info(f"{file_path} not found, returning empty dictionary")
+            return {}
+    except json.JSONDecodeError as e:
+        logger.error(f"Error decoding JSON in {file_path}: {str(e)}")
+        return {}
+    except Exception as e:
+        logger.error(f"Error loading {file_path}: {str(e)}")
+        return {}

@@ -6,8 +6,6 @@ from pathlib import Path
 from pywebio.output import put_markdown, put_code, toast
 import asyncio
 import json
-from telegram import Bot
-from telegram.error import TelegramError
 from common.utils import execute_hedge_trade
 from common.path_config import HEDGING_LATEST_CSV, MANUAL_ORDER_MONITOR_CSV, ORDER_HISTORY_CSV
 from hedge_automation.ws_manager import ws_manager

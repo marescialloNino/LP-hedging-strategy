@@ -5,7 +5,7 @@ import csv
 from datetime import datetime
 import json
 from pathlib import Path
-from common.constants import HEDGABLE_TOKENS
+from common.data_loader import load_hedgeable_tokens
 from common.path_config import (
     LOG_DIR, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGING_LATEST_CSV,
     REBALANCING_HISTORY_DIR, REBALANCING_LATEST_CSV, CONFIG_DIR
@@ -21,6 +21,8 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+HEDGABLE_TOKENS = load_hedgeable_tokens()
 
 AUTO_HEDGE_TOKENS_PATH = CONFIG_DIR / "auto_hedge_tokens.json"
 

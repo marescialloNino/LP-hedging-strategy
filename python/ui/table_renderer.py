@@ -4,10 +4,12 @@ import json
 from pathlib import Path
 from pywebio.output import put_table, put_text, put_row, put_markdown, put_html, toast, put_buttons
 from common.utils import calculate_token_usd_value
-from common.constants import HEDGABLE_TOKENS
-from common.path_config import CONFIG_DIR, HEDGING_LATEST_CSV
+from common.data_loader import load_hedgeable_tokens
+from common.path_config import CONFIG_DIR
 
 AUTO_HEDGE_TOKENS_PATH = CONFIG_DIR / "auto_hedge_tokens.json"
+HEDGABLE_TOKENS = load_hedgeable_tokens()
+
 
 def truncate_wallet(wallet):
     return f"{wallet[:5]}..." if isinstance(wallet, str) and len(wallet) > 5 else wallet

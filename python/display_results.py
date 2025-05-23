@@ -9,8 +9,7 @@ from pywebio import start_server, config
 from pywebio.input import checkbox, input_group, actions, select, input
 from pywebio.output import use_scope, put_markdown, put_error, put_text, put_table, put_buttons, toast, put_html
 from pywebio.session import run_async
-from common.data_loader import load_data
-from common.constants import HEDGABLE_TOKENS
+from common.data_loader import load_data, load_hedgeable_tokens
 from common.path_config import WORKFLOW_SHELL_SCRIPT, PNL_SHELL_SCRIPT, HEDGE_SHELL_SCRIPT, LOG_DIR
 from hedge_automation.order_manager import OrderManager
 from hedge_automation.hedge_actions import HedgeActions
@@ -40,6 +39,8 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+HEDGABLE_TOKENS = load_hedgeable_tokens()
 
 # Initialize OrderManager and HedgeActions
 order_manager = OrderManager()
