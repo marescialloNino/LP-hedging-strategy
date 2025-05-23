@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import aiohttp
-from aiohttp import ClientWebSocketMsg
+from aiohttp import WSMsgType
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class WebSpreaderListener:
                 if not self._connected:
                     await self._initialize()
                 async for msg in self.ws:
-                    if msg.type == aiohttp.WSMsgType.TEXT:
+                    if msg.type == WSMsgType.TEXT:
                         try:
                             data = json.loads(msg.data)
                             logger.debug(f"Raw WebSocket message: {data}")
@@ -90,11 +90,11 @@ class WebSpreaderListener:
                         except Exception as e:
                             logger.error(f"Error processing WebSocket message: {e}")
                             continue
-                    elif msg.type == aiohttp.WSMsgType.CLOSED:
+                    elif msg.type == WSMsgType.CLOSED:
                         logger.warning("WebSocket connection closed")
                         self._connected = False
                         break
-                    elif msg.type == aiohttp.WSMsgType.ERROR:
+                    elif msg.type == WSMsgType.ERROR:
                         logger.error(f"WebSocket error: {msg}")
                         self._connected = False
                         break
