@@ -10,8 +10,7 @@ from dotenv import load_dotenv
 import aiohttp
 from common.path_config import LOG_DIR, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGEABLE_TOKENS_JSON, ENCOUNTERED_TOKENS_JSON
 from common.bot_reporting import TGMessenger
-from common.data_loader import load_hedgeable_tokens, load_encountered_tokens
-from common.constants import SYMBOL_MAP
+from common.data_loader import load_hedgeable_tokens, load_encountered_tokens, load_ticker_mappings
 from hedge_monitoring.datafeed import bitgetfeed as bg
 
 # Configure logging
@@ -24,6 +23,12 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+mappings = load_ticker_mappings()
+SYMBOL_MAP=  mappings["SYMBOL_MAP"]
+BITGET_TOKENS_WITH_FACTOR_1000 =  mappings["BITGET_TOKENS_WITH_FACTOR_1000"]
+BITGET_TOKENS_WITH_FACTOR_10000 =  mappings["BITGET_TOKENS_WITH_FACTOR_10000"]
+
 
 def ensure_data_directory():
     """Ensure lp-data directory exists."""
@@ -104,12 +109,23 @@ def save_encountered_tokens(tokens: dict):
         logger.error(f"Error saving encountered tokens: {str(e)}")
 
 def normalize_ticker(ticker: str) -> str:
-    """Normalize ticker using SYMBOL_MAP and converting to uppercase."""
+    """
+    Normalize ticker using SYMBOL_MAP and factored token dictionaries, converting to uppercase.
+    
+    Args:
+        ticker: The ticker to normalize (e.g., "WPOL", "BONK").
+    
+    Returns:
+        str: Normalized ticker (e.g., "POL", "1000BONK").
+    """
     ticker = ticker.upper()
-    for onchain, bitget in SYMBOL_MAP.items():
-        if ticker == onchain.upper():
-            ticker = bitget.upper()
-            break
+    # Check all mapping dictionaries in priority order
+    if ticker in SYMBOL_MAP:
+        return SYMBOL_MAP[ticker].upper()
+    if ticker in BITGET_TOKENS_WITH_FACTOR_1000:
+        return BITGET_TOKENS_WITH_FACTOR_1000[ticker].upper()
+    if ticker in BITGET_TOKENS_WITH_FACTOR_10000:
+        return BITGET_TOKENS_WITH_FACTOR_10000[ticker].upper()
     return ticker
 
 async def send_telegram_alert(message: str):
@@ -161,19 +177,19 @@ async def sync_hedgeable_tokens():
             if chain not in existing_contracts:
                 existing_contracts[chain] = set()
             for addr in addresses:
-                existing_contracts[chain].add(addr.lower())
+                existing_contracts[chain].add(addr)
 
     for symbol, chains in encountered_tokens.items():
         for chain, addresses in chains.items():
             for addr in addresses:
-                encountered_contracts.add(addr.lower())
+                encountered_contracts.add(addr)
 
     # Process new tokens
     new_tokens_added = False
     encountered_updated = False
     for position in all_positions:
         ticker = position["ticker"]
-        contract_address = position["contract_address"].lower()
+        contract_address = position["contract_address"]
         chain = position["chain"].lower()
 
         if not ticker or not contract_address or not chain:

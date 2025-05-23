@@ -39,6 +39,7 @@ HEDGE_SHELL_SCRIPT = ROOT_DIR / "run_hedge_calculations.sh"
 CONFIG_DIR = ROOT_DIR / "python/config"
 HEDGEABLE_TOKENS_JSON =  CONFIG_DIR / "hedgeable_tokens.json"
 ENCOUNTERED_TOKENS_JSON =  CONFIG_DIR / "encountered_tokens.json"
+TICKER_MAPPINGS_PATH = CONFIG_DIR / "ticker_mappings.json"
 
 # Ensure directories exist
 LOG_DIR.mkdir(parents=True, exist_ok=True)

@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from common.path_config import (
     REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV,
-    METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV, LOG_DIR, HEDGEABLE_TOKENS_JSON, ENCOUNTERED_TOKENS_JSON
+    METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV, LOG_DIR, HEDGEABLE_TOKENS_JSON, ENCOUNTERED_TOKENS_JSON, TICKER_MAPPINGS_PATH, CONFIG_DIR
 )
 
 
@@ -175,3 +175,44 @@ def load_json(file_path) -> dict:
     except Exception as e:
         logger.error(f"Error loading {file_path}: {str(e)}")
         return {}
+    
+def load_ticker_mappings() -> dict:
+    """Load ticker mappings from ticker_mappings.json or initialize with defaults."""
+    default_mappings = {
+        "SYMBOL_MAP": {},
+        "BITGET_TOKENS_WITH_FACTOR_1000": {},
+        "BITGET_TOKENS_WITH_FACTOR_10000": {}
+    }
+    try:
+        if TICKER_MAPPINGS_PATH.exists():
+            with TICKER_MAPPINGS_PATH.open('r') as f:
+                content = f.read().strip()
+                if not content:
+                    logger.warning("ticker_mappings.json is empty, returning defaults")
+                    return default_mappings
+                data = json.loads(content)
+                # Ensure all expected keys exist
+                for key in default_mappings:
+                    if key not in data:
+                        data[key] = {}
+                logger.info("Ticker mappings loaded from ticker_mappings.json")
+                return data
+        else:
+            logger.info("ticker_mappings.json not found, creating with defaults")
+            save_ticker_mappings(default_mappings)
+            return default_mappings
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error(f"Error loading ticker_mappings.json: {e}")
+        save_ticker_mappings(default_mappings)
+        return default_mappings
+
+def save_ticker_mappings(mappings: dict):
+    """Save ticker mappings to ticker_mappings.json."""
+    try:
+        CONFIG_DIR.mkdir(exist_ok=True)
+        with TICKER_MAPPINGS_PATH.open('w') as f:
+            json.dump(mappings, f, indent=2)
+        logger.info("Ticker mappings saved to ticker_mappings.json")
+    except Exception as e:
+        logger.error(f"Error saving ticker_mappings.json: {e}")
+

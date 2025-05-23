@@ -14,6 +14,7 @@ from common.path_config import WORKFLOW_SHELL_SCRIPT, PNL_SHELL_SCRIPT, HEDGE_SH
 from hedge_automation.order_manager import OrderManager
 from hedge_automation.hedge_actions import HedgeActions
 from common.utils import run_shell_script
+from ui.ticker_mapping import render_add_token_mapping_section
 from ui.table_renderer import (
     render_wallet_positions,
     render_pnl_tables,
@@ -171,6 +172,8 @@ async def main():
             put_text("No hedgeable tokens available.")
 
         await render_custom_hedge_section(hedge_actions)
+
+        await render_add_token_mapping_section()
 
 
 def cleanup():

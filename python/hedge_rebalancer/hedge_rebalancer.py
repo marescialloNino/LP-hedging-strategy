@@ -5,11 +5,12 @@ import csv
 from datetime import datetime
 import json
 from pathlib import Path
-from common.data_loader import load_hedgeable_tokens
+from common.data_loader import load_hedgeable_tokens, load_ticker_mappings
 from common.path_config import (
     LOG_DIR, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGING_LATEST_CSV,
     REBALANCING_HISTORY_DIR, REBALANCING_LATEST_CSV, CONFIG_DIR
 )
+
 
 # Configure logging
 logging.basicConfig(
@@ -23,6 +24,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 HEDGABLE_TOKENS = load_hedgeable_tokens()
+
+mappings = load_ticker_mappings()
+SYMBOL_MAP=  mappings["SYMBOL_MAP"]
+BITGET_TOKENS_WITH_FACTOR_1000 =  mappings["BITGET_TOKENS_WITH_FACTOR_1000"]
+BITGET_TOKENS_WITH_FACTOR_10000 =  mappings["BITGET_TOKENS_WITH_FACTOR_10000"]
 
 AUTO_HEDGE_TOKENS_PATH = CONFIG_DIR / "auto_hedge_tokens.json"
 
@@ -127,56 +133,79 @@ def calculate_hedge_quantities():
     return hedge_quantities
 
 def calculate_lp_quantities():
-    """Calculate total LP quantities by Bitget symbol, matching addresses by chain."""
+    """Calculate total LP quantities by Bitget symbol, matching addresses by chain, converting to Bitget units."""
     lp_quantities = {symbol: 0.0 for symbol in HEDGABLE_TOKENS}
     
-    # Read Meteora LP positions (Solana-specific, no chain column yet)
     if METEORA_LATEST_CSV.exists():
         try:
             meteora_df = pd.read_csv(METEORA_LATEST_CSV)
+            logger.debug(f"Meteora CSV rows: {len(meteora_df)}")
             for _, row in meteora_df.iterrows():
                 token_x = row["Token X Address"]
                 token_y = row["Token Y Address"]
                 qty_x = float(row["Token X Qty"] or 0)
                 qty_y = float(row["Token Y Qty"] or 0)
-                chain = "solana"  # Hardcode Solana for Meteora
+                chain = "solana"
+                logger.debug(f"Meteora row: token_x={token_x}, qty_x={qty_x}, token_y={token_y}, qty_y={qty_y}")
 
                 for symbol, chains in HEDGABLE_TOKENS.items():
                     if chain in chains:
                         addresses = chains[chain]
+                        logger.debug(f"Checking {symbol} for chain={chain}, addresses={addresses}")
+                        # Convert to Bitget units for factored tokens
+                        factor = (
+                            1000 if any(symbol.startswith(factor_symbol) for factor_symbol in BITGET_TOKENS_WITH_FACTOR_1000.values())
+                            else 10000 if any(symbol.startswith(factor_symbol) for factor_symbol in BITGET_TOKENS_WITH_FACTOR_10000.values())
+                            else 1
+                        )
+                        logger.debug(f"Factor for {symbol}: {factor}")
                         if token_x in addresses:
-                            lp_quantities[symbol] += qty_x
+                            lp_quantities[symbol] += qty_x / factor
+                            logger.debug(f"Matched {symbol} for token_x={token_x}, added {qty_x / factor}, total: {lp_quantities[symbol]}")
                         if token_y in addresses:
-                            lp_quantities[symbol] += qty_y
+                            lp_quantities[symbol] += qty_y / factor
+                            logger.debug(f"Matched {symbol} for token_y={token_y}, added {qty_y / factor}, total: {lp_quantities[symbol]}")
         except Exception as e:
             logger.error(f"Error reading {METEORA_LATEST_CSV}: {e}")
     else:
         logger.warning(f"{METEORA_LATEST_CSV} not found.")
 
-    # Read Krystal LP positions (uses Chain column)
     if KRYSTAL_LATEST_CSV.exists():
         try:
             krystal_df = pd.read_csv(KRYSTAL_LATEST_CSV)
+            logger.debug(f"Krystal CSV rows: {len(krystal_df)}")
             for _, row in krystal_df.iterrows():
                 token_x = row["Token X Address"]
                 token_y = row["Token Y Address"]
                 qty_x = float(row["Token X Qty"] or 0)
                 qty_y = float(row["Token Y Qty"] or 0)
-                chain = row["Chain"].lower()  
+                chain = row["Chain"].lower()
+                logger.debug(f"Krystal row: chain={chain}, token_x={token_x}, qty_x={qty_x}, token_y={token_y}, qty_y={qty_y}")
 
                 for symbol, chains in HEDGABLE_TOKENS.items():
                     if chain in chains:
                         addresses = chains[chain]
+                        logger.debug(f"Checking {symbol} for chain={chain}, addresses={addresses}")
+                        factor = (
+                            1000 if any(symbol.startswith(factor_symbol) for factor_symbol in BITGET_TOKENS_WITH_FACTOR_1000.values())
+                            else 10000 if any(symbol.startswith(factor_symbol) for factor_symbol in BITGET_TOKENS_WITH_FACTOR_10000.values())
+                            else 1
+                        )
+                        logger.debug(f"Factor for {symbol}: {factor}")
                         if token_x in addresses:
-                            lp_quantities[symbol] += qty_x
+                            lp_quantities[symbol] += qty_x / factor
+                            logger.debug(f"Matched {symbol} for token_x={token_x}, added {qty_x / factor}, total: {lp_quantities[symbol]}")
                         if token_y in addresses:
-                            lp_quantities[symbol] += qty_y
+                            lp_quantities[symbol] += qty_y / factor
+                            logger.debug(f"Matched {symbol} for token_y={token_y}, added {qty_y / factor}, total: {lp_quantities[symbol]}")
         except Exception as e:
             logger.error(f"Error reading {KRYSTAL_LATEST_CSV}: {e}")
     else:
         logger.warning(f"{KRYSTAL_LATEST_CSV} not found.")
     
+    logger.debug(f"Final LP quantities: {lp_quantities}")
     return lp_quantities
+
 
 def check_hedge_rebalance(positive_trigger=0.1, negative_trigger=-0.1):
     """Compare LP quantities with absolute hedge quantities and output results."""

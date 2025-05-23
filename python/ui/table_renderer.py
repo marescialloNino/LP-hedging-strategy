@@ -4,12 +4,15 @@ import json
 from pathlib import Path
 from pywebio.output import put_table, put_text, put_row, put_markdown, put_html, toast, put_buttons
 from common.utils import calculate_token_usd_value
-from common.data_loader import load_hedgeable_tokens
+from common.data_loader import load_hedgeable_tokens, load_ticker_mappings
 from common.path_config import CONFIG_DIR
 
 AUTO_HEDGE_TOKENS_PATH = CONFIG_DIR / "auto_hedge_tokens.json"
 HEDGABLE_TOKENS = load_hedgeable_tokens()
-
+mappings = load_ticker_mappings()
+SYMBOL_MAP=  mappings["SYMBOL_MAP"]
+BITGET_TOKENS_WITH_FACTOR_1000 =  mappings["BITGET_TOKENS_WITH_FACTOR_1000"]
+BITGET_TOKENS_WITH_FACTOR_10000 =  mappings["BITGET_TOKENS_WITH_FACTOR_10000"]
 
 def truncate_wallet(wallet):
     return f"{wallet[:5]}..." if isinstance(wallet, str) and len(wallet) > 5 else wallet
@@ -190,6 +193,7 @@ def render_pnl_tables(dataframes, error_flags):
             ])
         put_table(pnl_rows, header=pnl_headers)
 
+
 def render_hedging_table(dataframes, error_flags, hedge_actions):
     """
     Render the hedging table.
@@ -199,7 +203,6 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
         error_flags (dict): Error flags from data_loader
         hedge_actions (HedgeActions): Instance for handling hedge/close actions
     """
-    from pywebio.session import run_async
     krystal_error = error_flags.get('krystal_error', False)
     meteora_error = error_flags.get('meteora_error', False)
     hedging_error = error_flags.get('hedging_error', False)
@@ -247,12 +250,20 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 lp_amount_usd, lp_qty, has_krystal, has_meteora = calculate_token_usd_value(
                     token, krystal_df, meteora_df, use_krystal, use_meteora
                 )
+                # Adjust lp_qty for factored tokens
+                factor = (
+                    1000 if any(row["Token"].startswith(factor_symbol) for factor_symbol in BITGET_TOKENS_WITH_FACTOR_1000.values())
+                    else 10000 if any(row["Token"].startswith(factor_symbol) for factor_symbol in BITGET_TOKENS_WITH_FACTOR_10000.values())
+                    else 1
+                )
+                if pd.notna(lp_qty):
+                    lp_qty = lp_qty / factor
+
                 hedged_qty = row["quantity"]
                 hedge_amount = row["amount"]
                 funding_rate = row["funding_rate"] * 10000
                 is_auto = auto_hedge_tokens.get(token, False)
 
-                # For auto-hedged tokens, suppress Suggested Hedge Qty and Action
                 if is_auto:
                     rebalance_value = np.nan
                     action = ""
@@ -335,9 +346,17 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 lp_amount_usd, lp_qty, has_krystal, has_meteora = calculate_token_usd_value(
                     token, krystal_df, meteora_df, use_krystal, use_meteora
                 )
+                # Adjust lp_qty for factored tokens
+                factor = (
+                    1000 if any(row["symbol"].startswith(factor_symbol) for factor_symbol in BITGET_TOKENS_WITH_FACTOR_1000.values())
+                    else 10000 if any(row["symbol"].startswith(factor_symbol) for factor_symbol in BITGET_TOKENS_WITH_FACTOR_10000.values())
+                    else 1
+                )
+                if pd.notna(lp_qty):
+                    lp_qty = lp_qty / factor
+
                 is_auto = auto_hedge_tokens.get(token, False)
 
-                # For auto-hedged tokens, suppress Suggested Hedge Qty and Action
                 if is_auto:
                     rebalance_value = np.nan
                     action = ""
