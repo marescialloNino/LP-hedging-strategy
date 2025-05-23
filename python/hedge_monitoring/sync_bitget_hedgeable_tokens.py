@@ -4,9 +4,6 @@ import logging
 import sys
 import os
 import pandas as pd
-from pathlib import Path
-from datetime import datetime
-from dotenv import load_dotenv
 import aiohttp
 from common.path_config import LOG_DIR, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGEABLE_TOKENS_JSON, ENCOUNTERED_TOKENS_JSON
 from common.bot_reporting import TGMessenger
@@ -214,12 +211,11 @@ async def sync_hedgeable_tokens():
                 # Check if token is non-hedgeable (not in Bitget symbols)
                 if bitget_symbol not in bitget_symbol_set:
                     await send_telegram_alert(
-                        f"New Non-Hedgeable Token Encountered:\n"
-                        f"Ticker: {normalized_ticker}\n"
-                        f"Contract Address: {contract_address}\n"
-                        f"Chain: {chain}\n"
-                        f"Bitget Symbol: {bitget_symbol}\n"
-                        f"Action: Check Bitget for alternative ticker."
+                        f"🚨 New Non-Hedgeable Token Encountered 🚨:  \n"
+                        f" Ticker: {normalized_ticker} \n"
+                        f" Contract Address: {contract_address} \n"
+                        f" Chain: {chain} \n"
+                        f"🚨 Action: Check Bitget for alternative ticker. 🚨"
                     )
 
         # Skip if CA already in hedgeable tokens for this chain
@@ -244,7 +240,7 @@ async def sync_hedgeable_tokens():
                 new_tokens_added = True
                 logger.info(f"Added new CA for existing token: {normalized_ticker} ({contract_address}) on {chain}, matched {bitget_symbol}")
                 await send_telegram_alert(
-                    f"New Contract Address for Existing Token:\n"
+                    f" 🚨 New Contract Address for Existing Token: 🚨 \n"
                     f"Ticker: {normalized_ticker}\n"
                     f"Contract Address: {contract_address}\n"
                     f"Chain: {chain}\n"
@@ -263,11 +259,11 @@ async def sync_hedgeable_tokens():
                 new_tokens_added = True
                 logger.info(f"Added new hedgeable token: {normalized_ticker} ({contract_address}) on {chain}, matched {bitget_symbol}")
                 await send_telegram_alert(
-                    f"New Hedgeable Token Added:\n"
+                    f" 🚨 New Hedgeable Token Added: 🚨\n"
                     f"Ticker: {normalized_ticker}\n"
                     f"Contract Address: {contract_address}\n"
                     f"Chain: {chain}\n"
-                    f"Matched Bitget Symbol: {bitget_symbol}"
+                    f" 🚨 Matched Bitget Symbol: {bitget_symbol} 🚨"
                 )
 
     # Save updated files
@@ -285,7 +281,7 @@ async def main():
         await sync_hedgeable_tokens()
     except Exception as e:
         logger.error(f"Sync error: {str(e)}")
-        await send_telegram_alert(f"Hedgeable Tokens Sync Error:\nError: {str(e)}")
+        await send_telegram_alert(f"🚨🚨🚨 Hedgeable Tokens Syncronization Error:\nError: {str(e)}")
 
 if __name__ == "__main__":
     if sys.platform == 'win32':
