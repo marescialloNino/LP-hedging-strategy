@@ -138,3 +138,5 @@ class WebSocketManager:
                 await asyncio.sleep(1)
 
         logger.info("Monitor_orders task completed: no active orders remaining")
+
+ws_manager = WebSocketManager()
