@@ -10,9 +10,8 @@ from common.utils import execute_hedge_trade
 from common.path_config import HEDGING_LATEST_CSV, MANUAL_ORDER_MONITOR_CSV, ORDER_HISTORY_CSV
 from hedge_automation.ws_manager import ws_manager
 from dotenv import load_dotenv
-from common.bot_reporting import TGMessenger  # adjust path if needed
+from common.bot_reporting import TGMessenger
 import aiohttp
-
 
 load_dotenv()
 
@@ -22,7 +21,7 @@ def send_telegram_alert(message):
     """Send alert message to configured Telegram channel."""
     print(f"Sending alert: {message}")
     try:
-        response = TGMessenger.send(message, 'LP eagle') 
+        response = TGMessenger.send(message, 'LP eagle')
         if isinstance(response, dict) and not response.get("ok", False):
             logger.error(f"Telegram response error: {response}")
     except Exception as e:
@@ -67,6 +66,60 @@ class HedgeActions:
         self.order_sender = order_sender
         self.hedge_processing = {}
 
+    async def on_order_update(self, order_info):
+        """Handle WebSocket order update messages from ws_manager."""
+        try:
+            logger.debug(f"Received WebSocket update: {order_info}")
+            order_id = order_info.get("orderId")
+            status = order_info.get("status")
+            fill_percentage = float(order_info.get("fillPercentage", 0.0))
+            token = order_info.get("Token", "UNKNOWN")
+
+            if not order_id or not status:
+                logger.warning(f"Invalid WebSocket update: {order_info}")
+                return
+
+            # Update order data
+            order_data = {
+                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Token": token,
+                "Rebalance Action": order_info.get("Rebalance Action", ""),
+                "Rebalance Value": float(order_info.get("Rebalance Value", 0.0)),
+                "orderId": order_id,
+                "status": status,
+                "fillPercentage": round(fill_percentage * 100, 2)  # Convert to percentage
+            }
+
+            # Update manual_order_monitor.csv
+            await update_manual_order_monitor_csv(order_data)
+
+            # Send Telegram alert for status changes
+            alert_message = (
+                f"Order Update:\n"
+                f"Token: {token}\n"
+                f"Action: {order_data['Rebalance Action']}\n"
+                f"Quantity: {order_data['Rebalance Value']:.5f}\n"
+                f"Order ID: {order_id}\n"
+                f"Status: {status}\n"
+                f"Fill Percentage: {order_data['fillPercentage']:.2f}%"
+            )
+            send_telegram_alert(alert_message)
+
+            # If order is resolved (SUCCESS or EXECUTION_ERROR), append to order_history.csv
+            if status in ["SUCCESS", "EXECUTION_ERROR"]:
+                await append_to_order_history(order_data, "Manual")
+                # Remove from manual_order_monitor.csv
+                if MANUAL_ORDER_MONITOR_CSV.exists():
+                    df = pd.read_csv(MANUAL_ORDER_MONITOR_CSV)
+                    df = df[df["orderId"] != order_id]
+                    df.to_csv(MANUAL_ORDER_MONITOR_CSV, index=False)
+                    logger.info(f"Removed resolved order {order_id} from {MANUAL_ORDER_MONITOR_CSV}")
+                toast(f"Order {order_id} for {token} {status.lower()}", duration=5, color="success" if status == "SUCCESS" else "error")
+
+        except Exception as e:
+            logger.error(f"Error processing WebSocket update: {e}")
+            send_telegram_alert(f"WebSocket Error:\nToken: {token}\nOrder ID: {order_id}\nError: {str(e)}")
+
     async def process_manual_order_result(self, result, token, action, quantity, timestamp):
         """Process the result of a manual order, update CSV, and subscribe to listener."""
         order_id = result['request']['clientOrderId'] if 'request' in result and 'clientOrderId' in result['request'] else ""
@@ -96,12 +149,19 @@ class HedgeActions:
             logger.info(f"Order {order_id} for {token} marked as EXECUTING")
             
             try:
-                # Start or reuse listener and subscribe order
-                await ws_manager.start_listener()
+                # Start listener with callback and subscribe order
+                await ws_manager.start_listener(update_callback=self.on_order_update)
                 await ws_manager.subscribe_order(order_data)
-                logger.info("WebSocket listener started successfully")
+                logger.info(f"WebSocket listener started and subscribed order {order_id}")
             except Exception as e:
-                logger.warning(f"Failed to start WebSocket listener: {e}. Order will not be monitored.")        
+                logger.error(f"Failed to start WebSocket listener or subscribe order: {e}")
+                send_telegram_alert(
+                    f"WebSocket Monitor Error:\n"
+                    f"Token: {token}\n"
+                    f"Order ID: {order_id}\n"
+                    f"Error: Failed to start WebSocket listener: {str(e)}"
+                )
+                toast(f"WebSocket monitoring failed for {token}: {str(e)}", duration=5, color="error")
             
             put_markdown(f"### Hedge Order Request for {result['token']}")
             put_code(json.dumps(result['request'], indent=2), language='json')
@@ -166,7 +226,6 @@ class HedgeActions:
                 logger.debug("Invalid quantity detected")
                 toast(f"Invalid quantity for {token}", duration=5, color="error")
                 return
-
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             task = asyncio.create_task(execute_hedge_trade(token, signed_quantity, self.order_sender))
             result = await task
