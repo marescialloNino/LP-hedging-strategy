@@ -1,136 +1,119 @@
 import asyncio
 import json
 import logging
-import aiohttp
-from aiohttp import WSMsgType
+from datetime import datetime
+import pandas as pd
+import websockets
+import traceback
+
 
 logger = logging.getLogger(__name__)
 
+def today_utc() -> pd.Timestamp:
+    tz_info = datetime.now().astimezone().tzinfo
+    now = pd.Timestamp(datetime.today()).tz_localize(tz_info).tz_convert('UTC')
+
+    return now
+
+
 class WebSpreaderListener:
-    AMAZON_WS_UPI = "ws://54.249.138.8:8080/wsapi/strat/update"
+    AMAZON_WS_UPI = 'ws://54.249.138.8:8080/wsapi/strat/update'
 
     def __init__(self):
-        self.session = None
-        self.ws = None
+        self.listener_task = None
         self.subscriptions = set()
-        self.results = {}
-        self._connected = False
-        self._task = None
-        self._running = False
+        self.results = {'errors': [], 'last_modified': pd.Timestamp(year=2000, month=1, day=1, tz='UTC')}
 
-    async def _initialize(self):
-        logger.info(f"Connecting to {self.AMAZON_WS_UPI}")
-        if self.session is None:
-            self.session = aiohttp.ClientSession()
-        max_retries = 5
-        for attempt in range(max_retries):
-            try:
-                self.ws = await self.session.ws_connect(self.AMAZON_WS_UPI, heartbeat=30)
-                self._connected = True
-                logger.info(f"Connected to {self.AMAZON_WS_UPI}")
-                for strat_id in self.subscriptions:
-                    await self._subscribe_strat(strat_id)
-                break
-            except Exception as e:
-                logger.error(f"WebSocket connection failed (attempt {attempt + 1}): {e}")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2)
-                else:
-                    raise Exception("WebSocket listener initialization failed after max retries")
-
-    async def _subscribe_strat(self, strat_id):
-        if not self._connected:
-            logger.warning(f"Cannot subscribe to {strat_id}, WebSocket not connected")
-            return
-        try:
-            message = {"type": "subscribe", "stratId": strat_id}
-            await self.ws.send_json(message)
-            logger.info(f"Subscribed to strat_id: {strat_id}")
-        except Exception as e:
-            logger.error(f"Failed to subscribe to {strat_id}: {e}")
-
-    async def subscribe(self, strat_id):
-        self.subscriptions.add(strat_id)
-        if self._connected:
-            await self._subscribe_strat(strat_id)
-        if not self._running:
-            self._running = True
-            self._task = asyncio.create_task(self._listen())
+    def message_age(self) -> float:
+        """
+        Age in seconds
+        :return: message age
+        """
+        return (today_utc() - self.results['last_modified']).total_seconds()
 
     async def _listen(self):
-        logger.info("Starting WebSocket listener task")
-        while self._running:
-            try:
-                if not self._connected:
-                    await self._initialize()
-                async for msg in self.ws:
-                    if msg.type == WSMsgType.TEXT:
-                        try:
-                            data = json.loads(msg.data)
-                            logger.debug(f"Raw WebSocket message: {data}")
-                            strat_events = data.get("stratEvents", [])
-                            for event in strat_events:
-                                strat_id = event.get("stratId")
-                                if strat_id not in self.subscriptions:
-                                    continue
-                                config = event.get("manualOrderConfiguration", {})
-                                results = event.get("results", {})
-                                self.results[strat_id] = {
-                                    "execQty": results.get("execQty", "0"),
-                                    "targetSize": config.get("targetSize", 0.0),
-                                    "maxOrderSize": config.get("maxOrderSize", 0.0),
-                                    "num_child_orders": config.get("numChildOrders", 0),
-                                    "state": results.get("state", ""),
-                                    "info": results.get("info", "")
-                                }
-                                logger.info(f"Received update for strat_id {strat_id}: {self.results[strat_id]}")
-                        except json.JSONDecodeError as e:
-                            logger.error(f"Failed to parse WebSocket message: {e}")
-                            continue
-                        except Exception as e:
-                            logger.error(f"Error processing WebSocket message: {e}")
-                            continue
-                    elif msg.type == WSMsgType.CLOSED:
+        self._logger = logger
+        greeting = 'Allo?'
+        logger.info('Starting WebSocket listener')
+        try:
+            async with websockets.connect(self.AMAZON_WS_UPI, max_size=4194304, ping_interval=30) as websocket:
+                await websocket.send(greeting)
+                while True:
+                    try:
+                        message = await websocket.recv()
+                        if message:
+                            messages = json.loads(message)
+                            events = messages.get('stratEvents', [])
+                            self.results['last_modified'] = today_utc()
+
+                            for event in events:
+                                strat_id = event.get('stratId', '')
+                                if strat_id in self.subscriptions:
+                                    result = event.get('results', {})
+                                    self.results[strat_id] = result
+                                    logger.debug(f"Stored update for strat_id {strat_id}: {result}")
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Failed to parse WebSocket message: {e}")
+                        continue
+                    except websockets.exceptions.ConnectionClosed:
                         logger.warning("WebSocket connection closed")
-                        self._connected = False
                         break
-                    elif msg.type == WSMsgType.ERROR:
-                        logger.error(f"WebSocket error: {msg}")
-                        self._connected = False
-                        break
-            except Exception as e:
-                logger.error(f"WebSocket listener error: {e}", exc_info=True)
-                self._connected = False
-                if self._running:
-                    logger.info("Attempting to reconnect WebSocket")
-                    await asyncio.sleep(2)
-                    continue
+                    except Exception as e:
+                        logger.error(f"Error processing WebSocket message: {e}", exc_info=True)
+                        continue
+        except Exception as e:
+            logger.error(f"WebSocket listener error: {e}", exc_info=True)
+            raise
 
-        if self._connected:
-            await self.ws.close()
-            self._connected = False
-        logger.info("WebSocket listener task completed")
+    def _start_listener(self):
+        async def rerun_forever(coro, *args, **kwargs):
+            while True:
+                try:
+                    await coro(*args, **kwargs)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    msg = traceback.format_exc()
+                    self.results['errors'].append(msg)
+                    logger.warning(f'Listener error: {msg}')
+                    await asyncio.sleep(60)
 
-    async def get_strat_result(self, strat_id):
-        if strat_id not in self.results:
-            logger.debug(f"No results yet for strat_id {strat_id}")
-            return {}
-        return self.results.get(strat_id, {})
+        def done_listener(task):
+            self.listener_task = None
+            logger.info("Listener task completed")
 
-    async def stop(self):
-        logger.info("Stopping WebSocket listener")
-        self._running = False
-        if self._task:
-            self._task.cancel()
+        self.results['errors'].clear()
+        self.listener_task = asyncio.create_task(rerun_forever(self._listen))
+        self.listener_task.add_done_callback(done_listener)
+
+    def subscribe(self, strat_id):
+        logger.info(f"Subscribing to strat_id: {strat_id}")
+        self.subscriptions.add(strat_id)
+        if self.listener_task is None:
+            self._start_listener()
+
+    async def stop_listener(self, strat_id=None):
+        logger.info(f"Stopping listener for strat_id: {strat_id if strat_id else 'all'}")
+        if strat_id is not None:
+            self.subscriptions.discard(strat_id)
+            self.results.pop(strat_id, None)
+            logger.info(f"Unsubscribed from strat_id: {strat_id}")
+            if len(self.subscriptions) > 0:
+                return
+        self.subscriptions.clear()
+        self.results = {'errors': [], 'last_modified': pd.Timestamp(year=2000, month=1, day=1, tz='UTC')}
+        if self.listener_task is not None:
+            logger.info('Cancelling listener task')
+            self.listener_task.cancel()
             try:
-                await self._task
+                await self.listener_task
             except asyncio.CancelledError:
                 logger.info("Listener task cancelled")
-        if self.ws and self._connected:
-            await self.ws.close()
-        if self.session:
-            await self.session.close()
-        self._connected = False
-        self.subscriptions.clear()
-        self.results.clear()
-        logger.info("WebSocket listener stopped")
+            self.listener_task = None
+
+    def get_strat_result(self, strat_id):
+        if strat_id in self.results:
+            return self.results.get(strat_id, {})
+        else:
+            logger.warning(f'Retrieving non-existing strat_id {strat_id} from listener with state {self.results["errors"]}')
+            return {}

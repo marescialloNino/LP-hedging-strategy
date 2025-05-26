@@ -8,14 +8,14 @@ import asyncio
 import json
 from common.utils import execute_hedge_trade
 from common.path_config import HEDGING_LATEST_CSV, MANUAL_ORDER_MONITOR_CSV, ORDER_HISTORY_CSV
-from hedge_automation.ws_manager import ws_manager
+from hedge_automation.ws_manager import WebSocketManager
 from dotenv import load_dotenv
 from common.bot_reporting import TGMessenger
-import aiohttp
 
 load_dotenv()
 
 logger = logging.getLogger('hedge_execution')
+ws_manager = WebSocketManager()
 
 def send_telegram_alert(message):
     """Send alert message to configured Telegram channel."""
@@ -65,7 +65,9 @@ class HedgeActions:
     def __init__(self, order_sender):
         self.order_sender = order_sender
         self.hedge_processing = {}
-        self.active_orders = set()  # Track active manual orders
+        self.active_orders = set()
+        self.SUBSCRIPTION_RETRIES = 3
+        self.SUBSCRIPTION_RETRY_DELAY = 2  # seconds
 
     async def on_order_update(self, order_info):
         """Handle WebSocket order update messages from ws_manager."""
@@ -88,7 +90,7 @@ class HedgeActions:
                 "Rebalance Value": float(order_info.get("Rebalance Value", 0.0)),
                 "orderId": order_id,
                 "status": status,
-                "fillPercentage": round(fill_percentage * 100, 2)  # Convert to percentage
+                "fillPercentage": round(fill_percentage * 100, 2)
             }
 
             # Update manual_order_monitor.csv
@@ -122,22 +124,22 @@ class HedgeActions:
                 toast(f"Order {order_id} for {token} {status.lower()}", duration=5, color="success" if status == "SUCCESS" else "error")
 
         except Exception as e:
-            logger.error(f"Error processing WebSocket update: {e}")
+            logger.error(f"Error processing WebSocket update: {e}", exc_info=True)
             send_telegram_alert(f"WebSocket Error:\nToken: {token}\nOrder ID: {order_id}\nError: {str(e)}")
 
     async def process_manual_order_result(self, result, token, action, quantity, timestamp):
         """Process the result of a manual order, update CSV, and subscribe to listener."""
         order_id = result['request']['clientOrderId'] if 'request' in result and 'clientOrderId' in result['request'] else ""
-        logger.debug(f"Processing manual order result for {token}USDT: order_id={order_id}, success={result['success']}")
+        logger.debug(f"Processing manual order result for {token}: order_id={order_id}, success={result['success']}")
 
         if not order_id:
-            logger.warning(f"No clientOrderId in result for {token}USDT: {result}")
-            toast(f"Order ID missing for {token}USDT, cannot track", duration=5, color="error")
+            logger.warning(f"No clientOrderId in result for {token}: {result}")
+            toast(f"Order ID missing for {token}, cannot track", duration=5, color="error")
             return
 
         order_data = {
             "Timestamp": timestamp,
-            "Token": f"{token}USDT",
+            "Token": token,
             "Rebalance Action": action,
             "Rebalance Value": abs(quantity),
             "orderId": order_id,
@@ -152,25 +154,42 @@ class HedgeActions:
             order_data["status"] = "EXECUTING"
             await update_manual_order_monitor_csv(order_data)
             logger.info(f"Order {order_id} for {token} marked as EXECUTING")
-            self.active_orders.add(order_id)  # Track the order
+            self.active_orders.add(order_id)
             logger.info(f"Order {order_id} added to active_orders. Total active: {len(self.active_orders)}")
             
-            try:
-                # Ensure WebSocket listener is running and subscribe order
-                if not ws_manager.running:
-                    await ws_manager.start_listener(update_callback=self.on_order_update)
-                    logger.info("WebSocket listener started")
-                await ws_manager.subscribe_order(order_data)
-                logger.info(f"Subscribed to order {order_id}")
-            except Exception as e:
-                logger.error(f"Failed to start WebSocket listener or subscribe order: {e}")
+            subscribed = False
+            for attempt in range(self.SUBSCRIPTION_RETRIES):
+                try:
+                    if not ws_manager.running:
+                        await ws_manager.start_listener(update_callback=self.on_order_update)
+                        logger.info("WebSocket listener started")
+                    await asyncio.sleep(self.SUBSCRIPTION_RETRY_DELAY)
+                    await ws_manager.subscribe_order(order_data)
+                    logger.info(f"Subscribed to order {order_id}")
+                    subscribed = True
+                    break
+                except Exception as e:
+                    logger.warning(f"Subscription attempt {attempt + 1} failed for order {order_id}: {e}")
+                    send_telegram_alert(
+                        f"WebSocket Monitor Warning:\n"
+                        f"Token: {token}\n"
+                        f"Order ID: {order_id}\n"
+                        f"Warning: WebSocket subscription failed (attempt {attempt + 1}): {str(e)}"
+                    )
+                    if attempt < self.SUBSCRIPTION_RETRIES - 1:
+                        await asyncio.sleep(self.SUBSCRIPTION_RETRY_DELAY)
+            if not subscribed:
+                logger.error(f"Failed to subscribe to order {order_id} after {self.SUBSCRIPTION_RETRIES} attempts")
                 send_telegram_alert(
                     f"WebSocket Monitor Error:\n"
-                    f"Token: {token}USDT\n"
+                    f"Token: {token}\n"
                     f"Order ID: {order_id}\n"
-                    f"Error: Failed to start WebSocket listener: {str(e)}"
+                    f"Error: Failed to subscribe to WebSocket after {self.SUBSCRIPTION_RETRIES} attempts"
                 )
-                toast(f"WebSocket monitoring failed for {token}USDT: {str(e)}", duration=5, color="error")
+                order_data["status"] = "EXECUTION_ERROR"
+                order_data["fillPercentage"] = 0.0
+                await update_manual_order_monitor_csv(order_data)
+                await self.on_order_update(order_data)
             
             put_markdown(f"### Hedge Order Request for {result['token']}")
             put_code(json.dumps(result['request'], indent=2), language='json')
@@ -181,7 +200,7 @@ class HedgeActions:
             order_data["fillPercentage"] = 0.0
             error_alert = (
                 f"Manual Order Error Alert:\n"
-                f"Token: {token}USDT\n"
+                f"Token: {token}\n"
                 f"Action: {action}\n"
                 f"Quantity: {abs(quantity):.5f}\n"
                 f"Order ID: {order_id}\n"
@@ -275,10 +294,10 @@ class HedgeActions:
             self.hedge_processing[token] = False
             logger.debug(f"hedge_processing reset for {token}")
 
-    async def handle_close_all_hedges(self, token_summary, hedging_df, hedging_error):
+    async def handle_close_all_hedges(self, token_summary, hedging_df, hedging_error=False):
         logger.debug("handle_close_all_hedges called")
         if any(self.hedge_processing.values()):
-            toast("Hedge or close operation in progress, please wait", duration=5, color="warning")
+            toast("Hedge or close operation in progress", duration=5, color="warning")
             return
 
         if hedging_error:

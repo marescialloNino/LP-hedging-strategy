@@ -7,17 +7,17 @@ logger = logging.getLogger(__name__)
 
 class WebSocketManager:
     def __init__(self):
-        self.listener = None
+        self.listener = WebSpreaderListener()
         self.active_orders = {}
         self.order_timeouts = {}
         self.update_callback = None
         self.monitor_task = None
         self.running = False
+        self.POLL_INTERVAL = 10  # seconds
 
     async def start_listener(self, update_callback):
         logger.info("Starting WebSocket listener")
-        if self.listener is None or not self.listener._connected:
-            self.listener = WebSpreaderListener()
+        if not self.running:
             self.update_callback = update_callback
             self.running = True
             if self.monitor_task is None or self.monitor_task.done():
@@ -34,9 +34,7 @@ class WebSocketManager:
                 await self.monitor_task
             except asyncio.CancelledError:
                 logger.info("Monitor task cancelled")
-        if self.listener:
-            await self.listener.stop()
-        self.listener = None
+        await self.listener.stop_listener()
         self.active_orders.clear()
         self.order_timeouts.clear()
         logger.info("WebSocket listener stopped, all orders cleared")
@@ -47,15 +45,8 @@ class WebSocketManager:
             logger.error("No orderId provided for subscription")
             raise ValueError("No orderId provided")
 
-        if not self.listener or not self.listener._connected:
-            logger.warning(f"WebSocket listener not connected, attempting to reinitialize for order {order_id}")
-            self.listener = WebSpreaderListener()
-            await self.listener._initialize()
-            logger.info("WebSocket listener initialized")
-
-        logger.info(f"Subscribing to strat_id: {order_id}")
-        await self.listener.subscribe(order_id)
-        logger.info(f"Subscribed to order: {order_id}")
+        logger.info(f"Subscribing to order: {order_id}")
+        self.listener.subscribe(order_id)
 
         target_size = order_data.get("Rebalance Value", 0.0)
         max_time = 90.0  # Default timeout
@@ -72,14 +63,6 @@ class WebSocketManager:
         logger.info("Starting WebSocket monitor_orders")
         while self.running or self.active_orders:
             try:
-                if not self.listener or not self.listener._connected:
-                    logger.warning("WebSocket listener not connected, attempting reinitialization")
-                    self.listener = WebSpreaderListener()
-                    await self.listener._initialize()
-                    for order_id in self.active_orders:
-                        await self.listener.subscribe(order_id)
-                    logger.info("WebSocket listener reinitialized and subscriptions restored")
-
                 orders_to_remove = []
                 for order_id, order_info in self.active_orders.items():
                     order_data = order_info["order_data"]
@@ -87,7 +70,7 @@ class WebSocketManager:
                     max_time = order_info["max_time"]
 
                     try:
-                        result = await self.listener.get_strat_result(order_id)
+                        result = self.listener.get_strat_result(order_id)
                         if not result:
                             logger.debug(f"No results yet for order {order_id}")
                             continue
@@ -100,7 +83,7 @@ class WebSocketManager:
                         status = "EXECUTING"
                         current_time = datetime.now().timestamp()
 
-                        if abs(fill_percentage - 1.0) <= 0.03:
+                        if abs(fill_percentage - 1.0) <= 0.03 or info == "targetSize reached":
                             status = "SUCCESS"
                             orders_to_remove.append(order_id)
                         elif current_time > self.order_timeouts.get(order_id, 0):
@@ -116,19 +99,21 @@ class WebSocketManager:
                         })
 
                         if self.update_callback:
-                            await self.update_callback(order_data)
+                            # Run callback in a new task to ensure proper context
+                            asyncio.create_task(self.update_callback(order_data))
 
                         logger.info(f"Order {order_id} updated: status={status}, fillPercentage={fill_percentage:.2%}, state={state}, info={info}")
 
                     except Exception as e:
-                        logger.error(f"Error processing order {order_id}: {e}")
+                        logger.error(f"Error processing order {order_id}: {e}", exc_info=True)
 
                 for order_id in orders_to_remove:
+                    await self.listener.stop_listener(order_id)
                     self.active_orders.pop(order_id, None)
                     self.order_timeouts.pop(order_id, None)
-                    logger.info(f"Removed resolved order {order_id}")
+                    logger.info(f"Removed and unsubscribed resolved order {order_id}")
 
-                await asyncio.sleep(30)
+                await asyncio.sleep(self.POLL_INTERVAL)
 
             except asyncio.CancelledError:
                 logger.info("Monitor_orders task cancelled")
