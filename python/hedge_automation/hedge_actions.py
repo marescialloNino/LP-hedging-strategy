@@ -128,16 +128,16 @@ class HedgeActions:
     async def process_manual_order_result(self, result, token, action, quantity, timestamp):
         """Process the result of a manual order, update CSV, and subscribe to listener."""
         order_id = result['request']['clientOrderId'] if 'request' in result and 'clientOrderId' in result['request'] else ""
-        logger.debug(f"Processing manual order result for {token}: order_id={order_id}, success={result['success']}")
+        logger.debug(f"Processing manual order result for {token}USDT: order_id={order_id}, success={result['success']}")
 
         if not order_id:
-            logger.warning(f"No clientOrderId in result for {token}: {result}")
-            toast(f"Order ID missing for {token}, cannot track", duration=5, color="error")
+            logger.warning(f"No clientOrderId in result for {token}USDT: {result}")
+            toast(f"Order ID missing for {token}USDT, cannot track", duration=5, color="error")
             return
 
         order_data = {
             "Timestamp": timestamp,
-            "Token": token,
+            "Token": f"{token}USDT",
             "Rebalance Action": action,
             "Rebalance Value": abs(quantity),
             "orderId": order_id,
@@ -166,11 +166,11 @@ class HedgeActions:
                 logger.error(f"Failed to start WebSocket listener or subscribe order: {e}")
                 send_telegram_alert(
                     f"WebSocket Monitor Error:\n"
-                    f"Token: {token}\n"
+                    f"Token: {token}USDT\n"
                     f"Order ID: {order_id}\n"
                     f"Error: Failed to start WebSocket listener: {str(e)}"
                 )
-                toast(f"WebSocket monitoring failed for {token}: {str(e)}", duration=5, color="error")
+                toast(f"WebSocket monitoring failed for {token}USDT: {str(e)}", duration=5, color="error")
             
             put_markdown(f"### Hedge Order Request for {result['token']}")
             put_code(json.dumps(result['request'], indent=2), language='json')
@@ -181,7 +181,7 @@ class HedgeActions:
             order_data["fillPercentage"] = 0.0
             error_alert = (
                 f"Manual Order Error Alert:\n"
-                f"Token: {token}\n"
+                f"Token: {token}USDT\n"
                 f"Action: {action}\n"
                 f"Quantity: {abs(quantity):.5f}\n"
                 f"Order ID: {order_id}\n"
