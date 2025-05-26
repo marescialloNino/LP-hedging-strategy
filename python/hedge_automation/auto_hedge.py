@@ -5,7 +5,6 @@ import asyncio
 import aiohttp
 from pathlib import Path
 from datetime import datetime
-from pywebio.output import toast
 from common.path_config import LOG_DIR, REBALANCING_LATEST_CSV, AUTOMATIC_ORDER_MONITOR_CSV, ORDER_HISTORY_CSV
 from common.data_loader import load_data
 from hedge_automation.order_manager import OrderManager
@@ -110,20 +109,12 @@ async def build_auto_orders():
     
     if not REBALANCING_LATEST_CSV.exists():
         logger.error(f"{REBALANCING_LATEST_CSV} not found, cannot build orders.")
-        try:
-            toast(f"REBALANCING_LATEST_CSV not found, cannot build orders", duration=5, color="error")
-        except Exception as e:
-            logger.warning(f"Failed to display toast: {e}")
         return False
 
     try:
         df = pd.read_csv(REBALANCING_LATEST_CSV)
         if df.empty:
             logger.info("No rebalancing data available.")
-            try:
-                toast("No rebalancing data available", duration=5, color="info")
-            except Exception as e:
-                logger.warning(f"Failed to display toast: {e}")
             return False
 
         order_data = []
@@ -151,25 +142,13 @@ async def build_auto_orders():
             
             order_df.to_csv(AUTOMATIC_ORDER_MONITOR_CSV, index=False)
             logger.info(f"Generated {AUTOMATIC_ORDER_MONITOR_CSV} with {len(order_data)} new orders")
-            try:
-                toast(f"Generated {len(order_data)} new auto-hedge orders", duration=5, color="success")
-            except Exception as e:
-                logger.warning(f"Failed to display toast: {e}")
             return True
         else:
             logger.info("No auto-hedge orders to process.")
-            try:
-                toast("No auto-hedge orders to process", duration=5, color="info")
-            except Exception as e:
-                logger.warning(f"Failed to display toast: {e}")
             return False
 
     except Exception as e:
         logger.error(f"Error building auto orders: {e}")
-        try:
-            toast(f"Error building auto orders: {e}", duration=5, color="error")
-        except Exception as e_toast:
-            logger.warning(f"Failed to display toast: {e_toast}")
         return False
 
 async def handle_order_update(order_data):
@@ -230,10 +209,6 @@ async def handle_order_update(order_data):
 async def process_auto_hedge():
     """Process auto-hedge actions from AUTOMATIC_ORDER_MONITOR_CSV."""
     logger.info("Starting auto-hedge process...")
-    try:
-        toast("Starting auto-hedge process", duration=5, color="info")
-    except Exception as e:
-        logger.warning(f"Failed to display toast: {e}")
     await send_telegram_alert("Starting auto-hedge process...")
     
     data = load_data()
@@ -247,10 +222,6 @@ async def process_auto_hedge():
         logger.error("Workflow errors detected, suspending auto-hedging.")
         logger.error(f"Error flags: {error_flags}")
         logger.error(f"Errors: {errors.get('messages', [])}")
-        try:
-            toast("Workflow errors detected, auto-hedging suspended", duration=5, color="error")
-        except Exception as e:
-            logger.warning(f"Failed to display toast: {e}")
         await send_telegram_alert(
             f"Auto-Hedge Error:\n"
             f"Workflow errors detected, auto-hedging suspended.\n"
@@ -266,19 +237,11 @@ async def process_auto_hedge():
     try:
         if not AUTOMATIC_ORDER_MONITOR_CSV.exists():
             logger.error(f"{AUTOMATIC_ORDER_MONITOR_CSV} not found, cannot process orders.")
-            try:
-                toast(f"{AUTOMATIC_ORDER_MONITOR_CSV} not found", duration=5, color="error")
-            except Exception as e:
-                logger.warning(f"Failed to display toast: {e}")
             return
 
         df = pd.read_csv(AUTOMATIC_ORDER_MONITOR_CSV)
         if df.empty:
             logger.info("No orders available in AUTOMATIC_ORDER_MONITOR_CSV.")
-            try:
-                toast("No orders available in AUTOMATIC_ORDER_MONITOR_CSV", duration=5, color="info")
-            except Exception as e:
-                logger.warning(f"Failed to display toast: {e}")
             return
 
         listener_started = False
@@ -286,10 +249,6 @@ async def process_auto_hedge():
             try:
                 await ws_manager.start_listener(handle_order_update)
                 logger.info("WebSocket listener started")
-                try:
-                    toast("WebSocket listener started", duration=5, color="success")
-                except Exception as e:
-                    logger.warning(f"Failed to display toast: {e}")
                 listener_started = True
                 break
             except Exception as e:
@@ -302,10 +261,6 @@ async def process_auto_hedge():
                     await asyncio.sleep(LISTENER_RETRY_DELAY)
         if not listener_started:
             logger.error(f"Failed to start WebSocket listener after {LISTENER_RETRIES} attempts")
-            try:
-                toast(f"Failed to start WebSocket listener after {LISTENER_RETRIES} attempts", duration=5, color="error")
-            except Exception as e:
-                logger.warning(f"Failed to display toast: {e}")
             await send_telegram_alert(
                 f"Auto-Hedge Error:\n"
                 f"Failed to start WebSocket listener after {LISTENER_RETRIES} attempts"
@@ -338,7 +293,7 @@ async def process_auto_hedge():
                         subscribed = True
                         break
                     except Exception as sub_e:
-                        logger.warning(f"Subscription attempt {attempt + 1} failed for order {order_id}: {sub_e}")
+                        logger.warning(f"Subscription attempt {attempt + 1} failed for {order_id}: {sub_e}")
                         await send_telegram_alert(
                             f"Auto Order Monitoring Warning:\n"
                             f"Token: {token}\n"
@@ -393,10 +348,6 @@ async def process_auto_hedge():
                     order_id = result['request']['clientOrderId'] if 'request' in result and 'clientOrderId' in result['request'] else ""
                     if not order_id:
                         logger.warning(f"No clientOrderId in result for {token}: {result}")
-                        try:
-                            toast(f"No clientOrderId for {token}, cannot track", duration=5, color="error")
-                        except Exception as e:
-                            logger.warning(f"Failed to display toast: {e}")
                         await send_telegram_alert(
                             f"Auto Order Warning:\n"
                             f"Token: {token}\n"
@@ -415,10 +366,6 @@ async def process_auto_hedge():
 
                     if result['success']:
                         logger.info(f"Order successfully submitted for {token}: Order ID {order_id}")
-                        try:
-                            toast(f"Auto-hedge order triggered for {token}", duration=5, color="success")
-                        except Exception as e:
-                            logger.warning(f"Failed to display toast: {e}")
                         await send_telegram_alert(
                             f"Auto Order Submitted:\n"
                             f"Token: {token}\n"
@@ -447,10 +394,6 @@ async def process_auto_hedge():
                             "fillPercentage": 0.0
                         })
                         await update_order_monitor_csv(order_data, match_by_token_action=True)
-                        try:
-                            toast(f"Failed to submit auto-hedge order for {token}: {error_message}", duration=5, color="error")
-                        except Exception as e_toast:
-                            logger.warning(f"Failed to display toast: {e_toast}")
                         await send_telegram_alert(
                             f"Auto Order Error Alert:\n"
                             f"Token: {token}\n"
@@ -504,35 +447,19 @@ async def process_auto_hedge():
             try:
                 if not AUTOMATIC_ORDER_MONITOR_CSV.exists():
                     logger.info("Order monitor CSV no longer exists, all orders processed.")
-                    try:
-                        toast("All auto-hedge orders processed", duration=5, color="success")
-                    except Exception as e:
-                        logger.warning(f"Failed to display toast: {e}")
                     break
                 df = pd.read_csv(AUTOMATIC_ORDER_MONITOR_CSV)
                 if df.empty:
                     logger.info("All orders resolved.")
-                    try:
-                        toast("All auto-hedge orders resolved", duration=5, color="success")
-                    except Exception as e:
-                        logger.warning(f"Failed to display toast: {e}")
                     break
                 logger.info(f"Pending orders: {len(df)}")
                 await asyncio.sleep(5)
             except Exception as e:
                 logger.error(f"Error checking orders: {e}")
-                try:
-                    toast(f"Error checking auto-hedge orders: {e}", duration=5, color="error")
-                except Exception as e_toast:
-                    logger.warning(f"Failed to display toast: {e_toast}")
                 await asyncio.sleep(5)
 
     except (OSError, pd.errors.EmptyDataError) as e:
         logger.error(f"Error accessing {AUTOMATIC_ORDER_MONITOR_CSV}: {e}")
-        try:
-            toast(f"Error accessing {AUTOMATIC_ORDER_MONITOR_CSV}: {e}", duration=5, color="error")
-        except Exception as e_toast:
-            logger.warning(f"Failed to display toast: {e_toast}")
         await send_telegram_alert(
             f"Auto-Hedge Error:\n"
             f"Failed to process {AUTOMATIC_ORDER_MONITOR_CSV}: {e}"
@@ -545,10 +472,6 @@ async def main():
         await process_auto_hedge()
     except Exception as e:
         logger.error(f"Main error: {e}")
-        try:
-            toast(f"Auto-hedge main error: {e}", duration=5, color="error")
-        except Exception as e_toast:
-            logger.warning(f"Failed to display toast: {e_toast}")
         await send_telegram_alert(f"Auto-Hedge Main Error:\nError: {str(e)}")
     finally:
         await ws_manager.stop_listener()
