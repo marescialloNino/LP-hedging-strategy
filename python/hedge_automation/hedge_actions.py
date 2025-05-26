@@ -65,6 +65,7 @@ class HedgeActions:
     def __init__(self, order_sender):
         self.order_sender = order_sender
         self.hedge_processing = {}
+        self.active_orders = set()  # Track active manual orders
 
     async def on_order_update(self, order_info):
         """Handle WebSocket order update messages from ws_manager."""
@@ -105,15 +106,19 @@ class HedgeActions:
             )
             send_telegram_alert(alert_message)
 
-            # If order is resolved (SUCCESS or EXECUTION_ERROR), append to order_history.csv
+            # If order is resolved, append to history and clean up
             if status in ["SUCCESS", "EXECUTION_ERROR"]:
                 await append_to_order_history(order_data, "Manual")
-                # Remove from manual_order_monitor.csv
                 if MANUAL_ORDER_MONITOR_CSV.exists():
                     df = pd.read_csv(MANUAL_ORDER_MONITOR_CSV)
                     df = df[df["orderId"] != order_id]
                     df.to_csv(MANUAL_ORDER_MONITOR_CSV, index=False)
                     logger.info(f"Removed resolved order {order_id} from {MANUAL_ORDER_MONITOR_CSV}")
+                if order_id in self.active_orders:
+                    self.active_orders.remove(order_id)
+                    logger.info(f"Order {order_id} removed from active_orders. Remaining: {len(self.active_orders)}")
+                    if not self.active_orders:
+                        logger.info("All manual orders resolved")
                 toast(f"Order {order_id} for {token} {status.lower()}", duration=5, color="success" if status == "SUCCESS" else "error")
 
         except Exception as e:
@@ -147,12 +152,16 @@ class HedgeActions:
             order_data["status"] = "EXECUTING"
             await update_manual_order_monitor_csv(order_data)
             logger.info(f"Order {order_id} for {token} marked as EXECUTING")
+            self.active_orders.add(order_id)  # Track the order
+            logger.info(f"Order {order_id} added to active_orders. Total active: {len(self.active_orders)}")
             
             try:
-                # Start listener with callback and subscribe order
-                await ws_manager.start_listener(update_callback=self.on_order_update)
+                # Ensure WebSocket listener is running and subscribe order
+                if not ws_manager.running:
+                    await ws_manager.start_listener(update_callback=self.on_order_update)
+                    logger.info("WebSocket listener started")
                 await ws_manager.subscribe_order(order_data)
-                logger.info(f"WebSocket listener started and subscribed order {order_id}")
+                logger.info(f"Subscribed to order {order_id}")
             except Exception as e:
                 logger.error(f"Failed to start WebSocket listener or subscribe order: {e}")
                 send_telegram_alert(
