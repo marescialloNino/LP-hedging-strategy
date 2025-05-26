@@ -121,7 +121,6 @@ class HedgeActions:
                     logger.info(f"Order {order_id} removed from active_orders. Remaining: {len(self.active_orders)}")
                     if not self.active_orders:
                         logger.info("All manual orders resolved")
-                toast(f"Order {order_id} for {token} {status.lower()}", duration=5, color="success" if status == "SUCCESS" else "error")
 
         except Exception as e:
             logger.error(f"Error processing WebSocket update: {e}", exc_info=True)
@@ -169,7 +168,7 @@ class HedgeActions:
                     subscribed = True
                     break
                 except Exception as e:
-                    logger.warning(f"Subscription attempt {attempt + 1} failed for order {order_id}: {e}")
+                    logger.warning(f"Subscription attempt {attempt + 1} failed for {order_id}: {e}")
                     send_telegram_alert(
                         f"WebSocket Monitor Warning:\n"
                         f"Token: {token}\n"
@@ -199,7 +198,7 @@ class HedgeActions:
             order_data["status"] = "SUBMISSION_ERROR"
             order_data["fillPercentage"] = 0.0
             error_alert = (
-                f"Manual Order Error Alert:\n"
+                f"Manual order error alert:\n"
                 f"Token: {token}\n"
                 f"Action: {action}\n"
                 f"Quantity: {abs(quantity):.5f}\n"
@@ -297,7 +296,7 @@ class HedgeActions:
     async def handle_close_all_hedges(self, token_summary, hedging_df, hedging_error=False):
         logger.debug("handle_close_all_hedges called")
         if any(self.hedge_processing.values()):
-            toast("Hedge or close operation in progress", duration=5, color="warning")
+            toast("Hedge or close operation in progress, please wait", duration=5, color="warning")
             return
 
         if hedging_error:
