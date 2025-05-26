@@ -70,10 +70,8 @@ async def update_order_monitor_csv(order_data, match_by_token_action=False):
         if AUTOMATIC_ORDER_MONITOR_CSV.exists():
             df = pd.read_csv(AUTOMATIC_ORDER_MONITOR_CSV)
             if match_by_token_action:
-                # Match by Token and Rebalance Action during submission retries
                 mask = (df["Token"] == order_data["Token"]) & (df["Rebalance Action"] == order_data["Rebalance Action"])
             else:
-                # Match by orderId for WebSocket updates
                 mask = df["orderId"] == order_data["orderId"]
             
             if mask.any():
@@ -136,10 +134,8 @@ async def build_auto_orders():
             order_df = pd.DataFrame(order_data)
             order_df = order_df.drop_duplicates(subset=["Token", "Rebalance Action"], keep="last")
             
-            # Merge with existing CSV to preserve unresolved orders
             if AUTOMATIC_ORDER_MONITOR_CSV.exists():
                 existing_df = pd.read_csv(AUTOMATIC_ORDER_MONITOR_CSV)
-                # Keep existing orders that are EXECUTING, SUCCESS, or EXECUTION_ERROR
                 existing_df = existing_df[existing_df["status"].isin(["EXECUTING", "SUCCESS", "EXECUTION_ERROR"])]
                 order_df = pd.concat([existing_df, order_df], ignore_index=True)
                 order_df = order_df.drop_duplicates(subset=["Token", "Rebalance Action"], keep="last")
@@ -168,7 +164,6 @@ async def handle_order_update(order_data):
             logger.warning(f"Invalid WebSocket update: {order_data}")
             return
 
-        # Update order data
         order_data_updated = {
             "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "Token": token,
@@ -176,13 +171,16 @@ async def handle_order_update(order_data):
             "Rebalance Value": float(order_data.get("Rebalance Value", 0.0)),
             "orderId": order_id,
             "status": status,
-            "fillPercentage": round(fill_percentage * 100, 2)  # Convert to percentage
+            "fillPercentage": round(fill_percentage * 100, 2)
         }
 
-        # Update AUTOMATIC_ORDER_MONITOR_CSV
+        FILL_THRESHOLD = 90.0
+        if order_data_updated["fillPercentage"] >= FILL_THRESHOLD and status not in ["SUCCESS", "EXECUTION_ERROR"]:
+            order_data_updated["status"] = "SUCCESS"
+            logger.info(f"Order {order_id} reached {FILL_THRESHOLD}% fill, marking as SUCCESS")
+
         await update_order_monitor_csv(order_data_updated, match_by_token_action=False)
 
-        # Send Telegram alert for status changes
         alert_message = (
             f"Auto Order Update:\n"
             f"Token: {token}\n"
@@ -194,7 +192,6 @@ async def handle_order_update(order_data):
         )
         await send_telegram_alert(alert_message)
 
-        # If order is resolved (SUCCESS or EXECUTION_ERROR), append to order_history.csv
         if status in ["SUCCESS", "EXECUTION_ERROR"]:
             await append_to_order_history(order_data_updated, "Auto")
             await remove_from_order_monitor(order_data_updated)
@@ -247,7 +244,6 @@ async def process_auto_hedge():
             logger.info("No orders available in AUTOMATIC_ORDER_MONITOR_CSV.")
             return
 
-        # Start WebSocket listener with retries
         listener_started = False
         for attempt in range(LISTENER_RETRIES):
             try:
@@ -327,7 +323,6 @@ async def process_auto_hedge():
                 logger.info(f"Skipping order for {token}: status is {current_status}")
                 continue
 
-            # Initialize order data
             order_data = {
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "Token": token,
@@ -361,7 +356,6 @@ async def process_auto_hedge():
                             f"Warning: No clientOrderId in result: {result}"
                         )
                     
-                    # Update order data with new orderId and status
                     order_data.update({
                         "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "orderId": order_id,
@@ -414,11 +408,10 @@ async def process_auto_hedge():
                         break
 
             if success:
-                # Subscribe to WebSocket for the successful order
                 subscribed = False
                 for attempt in range(SUBSCRIPTION_RETRIES):
                     try:
-                        await asyncio.sleep(2)  # Wait for order to register
+                        await asyncio.sleep(2)
                         await ws_manager.subscribe_order(order_data)
                         logger.info(f"Successfully subscribed to order {order_id} for {token}")
                         subscribed = True
@@ -448,6 +441,22 @@ async def process_auto_hedge():
                     })
                     await update_order_monitor_csv(order_data, match_by_token_action=False)
                     await handle_order_update(order_data)
+
+        logger.info("Waiting for all orders to be resolved...")
+        while True:
+            try:
+                if not AUTOMATIC_ORDER_MONITOR_CSV.exists():
+                    logger.info("Order monitor CSV no longer exists, all orders processed.")
+                    break
+                df = pd.read_csv(AUTOMATIC_ORDER_MONITOR_CSV)
+                if df.empty:
+                    logger.info("All orders resolved.")
+                    break
+                logger.info(f"Pending orders: {len(df)}")
+                await asyncio.sleep(5)
+            except Exception as e:
+                logger.error(f"Error checking orders: {e}")
+                await asyncio.sleep(5)
 
     except (OSError, pd.errors.EmptyDataError) as e:
         logger.error(f"Error accessing {AUTOMATIC_ORDER_MONITOR_CSV}: {e}")

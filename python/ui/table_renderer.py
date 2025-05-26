@@ -59,10 +59,10 @@ def save_auto_hedge_tokens(tokens):
         CONFIG_DIR.mkdir(exist_ok=True)
         with AUTO_HEDGE_TOKENS_PATH.open('w') as f:
             json.dump(tokens, f, indent=2)
-        toast("Configuration saved successfully!", duration=3, color="success")
+
     except Exception as e:
         print(f"Error saving auto_hedge_tokens.json: {str(e)}")
-        toast(f"Error saving configuration: {str(e)}", duration=3, color="error")
+
 
 def render_wallet_positions(dataframes, error_flags):
     """
