@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 from datetime import datetime
 from .ws_listener import WebSpreaderListener
 
@@ -13,7 +14,7 @@ class WebSocketManager:
         self.update_callback = None
         self.monitor_task = None
         self.running = False
-        self.POLL_INTERVAL = 10  # seconds
+        self.POLL_INTERVAL = 20  # seconds
 
     async def start_listener(self, update_callback):
         logger.info("Starting WebSocket listener")
@@ -48,8 +49,40 @@ class WebSocketManager:
         logger.info(f"Subscribing to order: {order_id}")
         self.listener.subscribe(order_id)
 
+        # Extract parameters for max_time calculation
         target_size = order_data.get("Rebalance Value", 0.0)
-        max_time = 90.0  # Default timeout
+        max_time = 600.0  # Default timeout
+
+        try:
+            result = self.listener.get_strat_result(order_id)
+            if result and "manualOrderConfiguration" in result:
+                config = result["manualOrderConfiguration"]
+                max_order_size = float(config.get("maxOrderSize", 0.0))
+                max_alive_order_time = float(config.get("maxAliveOrderTime", 6000))
+                child_order_delay = float(config.get("childOrderDelay", 0))
+                max_retry_as_limit_order = float(config.get("maxRetryAsLimitOrder", 0))
+
+                if target_size > 0 and max_order_size > 0:
+                    max_time = (
+                        math.ceil(max_order_size / target_size) *
+                        (max_alive_order_time + child_order_delay) / 1000 *
+                        (max_retry_as_limit_order + 1) +
+                        20
+                    )
+                    logger.debug(
+                        f"Calculated max_time for order {order_id}: "
+                        f"ceil({max_order_size}/{target_size}) * "
+                        f"({max_alive_order_time} + {child_order_delay})/1000 * "
+                        f"({max_retry_as_limit_order} + 1) + 20 = {max_time}s"
+                    )
+                else:
+                    logger.warning(
+                        f"Invalid sizes for max_time calculation for {order_id}: "
+                        f"target_size={target_size}, max_order_size={max_order_size}"
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to calculate max_time for {order_id}: {e}, using default {max_time}s")
+
         self.active_orders[order_id] = {
             "order_data": order_data,
             "target_size": target_size,
@@ -57,7 +90,7 @@ class WebSocketManager:
         }
         self.order_timeouts[order_id] = datetime.now().timestamp() + max_time
         logger.info(f"Order {order_id}: targetSize={target_size}, max_time={max_time}s")
-        logger.info(f"Added order {order_id} with timeout {max_time}s")
+        logger.info(f"Added order {order_id} with timeout {self.order_timeouts[order_id]}")
 
     async def monitor_orders(self):
         logger.info("Starting WebSocket monitor_orders")
@@ -78,6 +111,7 @@ class WebSocketManager:
                         exec_qty = float(result.get("execQty", 0.0))
                         state = result.get("state", "Unknown")
                         info = result.get("info", "")
+                        average_price = float(result.get("avgPrc", 0.0))
 
                         fill_percentage = abs(exec_qty / target_size) if target_size != 0 else 0.0
                         status = "EXECUTING"
@@ -94,6 +128,7 @@ class WebSocketManager:
                             "status": status,
                             "fillPercentage": fill_percentage,
                             "Token": order_data.get("Token", "UNKNOWN"),
+                            "Average Price": average_price,
                             "Rebalance Action": order_data.get("Rebalance Action", ""),
                             "Rebalance Value": target_size
                         })
@@ -102,7 +137,7 @@ class WebSocketManager:
                             # Run callback in a new task to ensure proper context
                             asyncio.create_task(self.update_callback(order_data))
 
-                        logger.info(f"Order {order_id} updated: status={status}, fillPercentage={fill_percentage:.2%}, state={state}, info={info}")
+                        logger.info(f"Order {order_id} updated: status={status}, fillPercentage={fill_percentage:.2%}, state={state}, info={info}, avgPrice={average_price}")
 
                     except Exception as e:
                         logger.error(f"Error processing order {order_id}: {e}", exc_info=True)

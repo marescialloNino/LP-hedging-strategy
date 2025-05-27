@@ -29,7 +29,7 @@ def send_telegram_alert(message):
 
 async def append_to_order_history(order_data, source):
     """Append a resolved order to order_history.csv."""
-    headers = ["Timestamp", "Token", "Rebalance Action", "Rebalance Value", "orderId", "status", "Source"]
+    headers = ["Timestamp", "Token", "Rebalance Action", "Rebalance Value", "orderId", "status", "avgPrice", "Source"]
     order_data["Source"] = source
     df_new = pd.DataFrame([order_data], columns=headers)
     
@@ -44,7 +44,7 @@ async def append_to_order_history(order_data, source):
 
 async def update_manual_order_monitor_csv(order_data):
     """Update manual_order_monitor.csv by modifying or appending a row."""
-    headers = ["Timestamp", "Token", "Rebalance Action", "Rebalance Value", "orderId", "status", "fillPercentage"]
+    headers = ["Timestamp", "Token", "Rebalance Action", "Rebalance Value", "orderId", "status", "fillPercentage", "avgPrice"]
     
     if MANUAL_ORDER_MONITOR_CSV.exists():
         df = pd.read_csv(MANUAL_ORDER_MONITOR_CSV)
@@ -82,7 +82,7 @@ class HedgeActions:
                 logger.warning(f"Invalid WebSocket update: {order_info}")
                 return
 
-            # Update order data
+            # Update order data with avgPrice
             order_data = {
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "Token": token,
@@ -90,13 +90,14 @@ class HedgeActions:
                 "Rebalance Value": float(order_info.get("Rebalance Value", 0.0)),
                 "orderId": order_id,
                 "status": status,
-                "fillPercentage": round(fill_percentage * 100, 2)
+                "fillPercentage": round(fill_percentage * 100, 2),
+                "avgPrice": order_info.get("avgPrice", 0.0)
             }
 
             # Update manual_order_monitor.csv
             await update_manual_order_monitor_csv(order_data)
 
-            # Send Telegram alert for status changes
+            # Send Telegram alert with avgPrice
             alert_message = (
                 f"Order Update:\n"
                 f"Token: {token}\n"
@@ -104,7 +105,8 @@ class HedgeActions:
                 f"Quantity: {order_data['Rebalance Value']:.5f}\n"
                 f"Order ID: {order_id}\n"
                 f"Status: {status}\n"
-                f"Fill Percentage: {order_data['fillPercentage']:.2f}%"
+                f"Fill Percentage: {order_data['fillPercentage']:.2f}%\n"
+                f"Average Price: {order_data['avgPrice']:.5f}"
             )
             send_telegram_alert(alert_message)
 
@@ -136,6 +138,7 @@ class HedgeActions:
             toast(f"Order ID missing for {token}, cannot track", duration=5, color="error")
             return
 
+        # Initialize order_data with avgPrice as 0.0
         order_data = {
             "Timestamp": timestamp,
             "Token": token,
@@ -143,7 +146,8 @@ class HedgeActions:
             "Rebalance Value": abs(quantity),
             "orderId": order_id,
             "status": "RECEIVED",
-            "fillPercentage": 0.0
+            "fillPercentage": 0.0,
+            "avgPrice": 0.0
         }
 
         await update_manual_order_monitor_csv(order_data)
@@ -187,6 +191,7 @@ class HedgeActions:
                 )
                 order_data["status"] = "EXECUTION_ERROR"
                 order_data["fillPercentage"] = 0.0
+                order_data["avgPrice"] = 0.0
                 await update_manual_order_monitor_csv(order_data)
                 await self.on_order_update(order_data)
             
@@ -197,6 +202,7 @@ class HedgeActions:
             error_message = result.get('error', 'Unknown error')
             order_data["status"] = "SUBMISSION_ERROR"
             order_data["fillPercentage"] = 0.0
+            order_data["avgPrice"] = 0.0
             error_alert = (
                 f"Manual order error alert:\n"
                 f"Token: {token}\n"

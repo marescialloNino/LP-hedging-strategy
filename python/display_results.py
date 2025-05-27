@@ -25,7 +25,6 @@ from ui.table_renderer import (
     render_custom_hedge_section
 )
 
-
 # Fix for Windows event loop issue
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -41,8 +40,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-HEDGABLE_TOKENS = load_hedgeable_tokens()
-
 # Initialize OrderManager and HedgeActions
 order_manager = OrderManager()
 hedge_actions = HedgeActions(order_manager.get_order_sender())
@@ -53,6 +50,8 @@ async def main():
     with use_scope('dashboard', clear=True):
         put_markdown("# 🔮 🧙‍♂️ 🧪 💸 CM's Hedging Dashboard 💸 🧪 🧙‍♂️ 🔮")
 
+
+        HEDGABLE_TOKENS = load_hedgeable_tokens()
         # Load data
         data = load_data()
         dataframes = data['dataframes']
@@ -78,10 +77,10 @@ async def main():
         put_markdown("## LP Positions PnL")
         async def handle_calculate_pnl():
             logger.info(f"Calculate PnL button clicked, executing {PNL_SHELL_SCRIPT}")
-            toast("Running pnl calculations... this may take a while 📈", duration=10, color="warning")
+            toast("Running pnl calculations... this may take a while, you can search for some new shitcoin in the meantime 📈", duration=10, color="warning")
             success, output = await run_shell_script(PNL_SHELL_SCRIPT)
             toast(
-                "PnL calculations completed successfully 🎉" if success else f"PnL calc failed: {output}",
+                "PnL calculations completed successfully, it'a Lambo 🚗 or a scooter 🛴???" if success else f"PnL calc failed: {output}",
                 duration=5,
                 color="success" if success else "error"
             )
@@ -105,7 +104,7 @@ async def main():
             # Update & Hedge buttons
             async def handle_run_workflow():
                 logger.info(f"Run Workflow clicked: {WORKFLOW_SHELL_SCRIPT}")
-                toast("Updating data... 🟠", duration=10, color="warning")
+                toast("Updating data... you can check BTC dominance in the meanwhile 🟠", duration=10, color="warning")
                 success, output = await run_shell_script(WORKFLOW_SHELL_SCRIPT)
                 toast(
                     "Data updated successfully ✅" if success else f"Update failed: {output}",
@@ -113,13 +112,13 @@ async def main():
                     color="success" if success else "error"
                 )
             put_buttons(
-                [{'label': 'Update Data 🎲', 'value': 'run_workflow', 'color': 'primary'}],
+                [{'label': 'Update LP and Hedge Data 🌊', 'value': 'run_workflow', 'color': 'primary'}],
                 onclick=lambda _: run_async(handle_run_workflow())
             )
 
             async def handle_run_hedge():
                 logger.info(f"Run Hedge clicked: {HEDGE_SHELL_SCRIPT}")
-                toast("Running hedge workflow... 🧊", duration=10, color="warning")
+                toast("Running hedge workflow... always keep your hedge fresh 🧊", duration=10, color="warning")
                 success, output = await run_shell_script(HEDGE_SHELL_SCRIPT)
                 toast(
                     "Hedge workflow successful ✅" if success else f"Hedge failed: {output}",

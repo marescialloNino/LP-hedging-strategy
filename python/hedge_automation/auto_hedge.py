@@ -46,7 +46,7 @@ async def send_telegram_alert(message):
 
 async def append_to_order_history(order_data, source):
     """Append a resolved order to order_history.csv."""
-    headers = ["Timestamp", "Token", "Rebalance Action", "Rebalance Value", "orderId", "status", "Source"]
+    headers = ["Timestamp", "Token", "Rebalance Action", "Rebalance Value", "orderId", "status", "avgPrice", "Source"]
     order_data["Source"] = source
     order_data["Timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     df_new = pd.DataFrame([order_data], columns=headers)
@@ -64,7 +64,7 @@ async def append_to_order_history(order_data, source):
 
 async def update_order_monitor_csv(order_data, match_by_token_action=False):
     """Update AUTOMATIC_ORDER_MONITOR_CSV by modifying or adding a row."""
-    headers = ["Timestamp", "Token", "Rebalance Action", "Rebalance Value", "orderId", "status", "fillPercentage"]
+    headers = ["Timestamp", "Token", "Rebalance Action", "Rebalance Value", "orderId", "status", "fillPercentage", "avgPrice"]
     
     try:
         if AUTOMATIC_ORDER_MONITOR_CSV.exists():
@@ -127,7 +127,8 @@ async def build_auto_orders():
                     "Rebalance Value": float(row["Rebalance Value"]),
                     "orderId": "",
                     "status": "RECEIVED",
-                    "fillPercentage": 0.0
+                    "fillPercentage": 0.0,
+                    "avgPrice": 0.0
                 })
 
         if order_data:
@@ -159,6 +160,7 @@ async def handle_order_update(order_data):
         status = order_data.get("status")
         fill_percentage = float(order_data.get("fillPercentage", 0.0))
         token = order_data.get("Token", "UNKNOWN")
+        avg_price = float(order_data.get("avgPrice", 0.0))
 
         if not order_id or not status:
             logger.warning(f"Invalid WebSocket update: {order_data}")
@@ -171,7 +173,8 @@ async def handle_order_update(order_data):
             "Rebalance Value": float(order_data.get("Rebalance Value", 0.0)),
             "orderId": order_id,
             "status": status,
-            "fillPercentage": round(fill_percentage * 100, 2)
+            "fillPercentage": round(fill_percentage * 100, 2),
+            "avgPrice": avg_price
         }
 
         FILL_THRESHOLD = 90.0
@@ -188,7 +191,8 @@ async def handle_order_update(order_data):
             f"Quantity: {order_data_updated['Rebalance Value']:.5f}\n"
             f"Order ID: {order_id}\n"
             f"Status: {status}\n"
-            f"Fill Percentage: {order_data_updated['fillPercentage']:.2f}%"
+            f"Fill Percentage: {order_data_updated['fillPercentage']:.2f}%\n"
+            f"Average Price: {avg_price:.5f}"
         )
         await send_telegram_alert(alert_message)
 
@@ -283,7 +287,8 @@ async def process_auto_hedge():
                     "Rebalance Value": quantity,
                     "orderId": order_id,
                     "status": current_status,
-                    "fillPercentage": float(row["fillPercentage"])
+                    "fillPercentage": float(row["fillPercentage"]),
+                    "avgPrice": float(row.get("avgPrice", 0.0))
                 }
                 subscribed = False
                 for attempt in range(SUBSCRIPTION_RETRIES):
@@ -313,7 +318,8 @@ async def process_auto_hedge():
                     order_data.update({
                         "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "status": "EXECUTION_ERROR",
-                        "fillPercentage": 0.0
+                        "fillPercentage": 0.0,
+                        "avgPrice": 0.0
                     })
                     await update_order_monitor_csv(order_data, match_by_token_action=False)
                     await handle_order_update(order_data)
@@ -330,7 +336,8 @@ async def process_auto_hedge():
                 "Rebalance Value": quantity,
                 "orderId": "",
                 "status": "RECEIVED",
-                "fillPercentage": 0.0
+                "fillPercentage": 0.0,
+                "avgPrice": 0.0
             }
             await update_order_monitor_csv(order_data, match_by_token_action=True)
 
@@ -360,7 +367,8 @@ async def process_auto_hedge():
                         "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "orderId": order_id,
                         "status": "EXECUTING",
-                        "fillPercentage": 0.0
+                        "fillPercentage": 0.0,
+                        "avgPrice": 0.0
                     })
                     await update_order_monitor_csv(order_data, match_by_token_action=True)
 
@@ -391,7 +399,8 @@ async def process_auto_hedge():
                             "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "orderId": order_id or "N/A",
                             "status": "SUBMISSION_ERROR",
-                            "fillPercentage": 0.0
+                            "fillPercentage": 0.0,
+                            "avgPrice": 0.0
                         })
                         await update_order_monitor_csv(order_data, match_by_token_action=True)
                         await send_telegram_alert(
@@ -417,7 +426,7 @@ async def process_auto_hedge():
                         subscribed = True
                         break
                     except Exception as sub_e:
-                        logger.warning(f"Subscription attempt {attempt + 1} failed for order {order_id}: {sub_e}")
+                        logger.warning(f"Subscription attempt {attempt + 1} failed for {order_id}: {sub_e}")
                         await send_telegram_alert(
                             f"Auto Order Monitoring Warning:\n"
                             f"Token: {token}\n"
@@ -437,7 +446,8 @@ async def process_auto_hedge():
                     order_data.update({
                         "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "status": "EXECUTION_ERROR",
-                        "fillPercentage": 0.0
+                        "fillPercentage": 0.0,
+                        "avgPrice": 0.0
                     })
                     await update_order_monitor_csv(order_data, match_by_token_action=False)
                     await handle_order_update(order_data)
