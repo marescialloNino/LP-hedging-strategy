@@ -128,7 +128,7 @@ class WebSocketManager:
                             "status": status,
                             "fillPercentage": fill_percentage,
                             "Token": order_data.get("Token", "UNKNOWN"),
-                            "Average Price": average_price,
+                            "avgPrice": average_price,
                             "Rebalance Action": order_data.get("Rebalance Action", ""),
                             "Rebalance Value": target_size
                         })
