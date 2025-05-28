@@ -1,5 +1,5 @@
 import asyncio
-from .datafeed import bitgetfeed as bg
+from hedge_monitoring.datafeed import bitgetfeed as bg
 import sys
 import os
 from dotenv import load_dotenv
