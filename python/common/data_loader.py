@@ -12,26 +12,6 @@ from common.path_config import (
 logger = logging.getLogger(__name__)
 
 def load_data():
-    """
-    Load CSV and JSON error flag files, handling errors and returning structured data.
-
-    Returns:
-        dict: {
-            'dataframes': {str: pd.DataFrame},  # Loaded CSVs
-            'error_flags': {
-                'hedge': dict,  # Hedge error flags
-                'lp': dict      # LP error flags
-            },
-            'errors': {
-                'has_error': bool,
-                'krystal_error': bool,
-                'meteora_error': bool,
-                'hedging_error': bool,
-                'messages': list[str]
-            }
-        }
-    """
-
     dataframes = {}
     error_flags = {'hedge': {}, 'lp': {}}
     errors = {
@@ -42,7 +22,7 @@ def load_data():
         'messages': []
     }
 
-    # Load error flags
+    # Load hedging error flags 
     try:
         if HEDGE_ERROR_FLAGS_PATH.exists():
             with HEDGE_ERROR_FLAGS_PATH.open('r') as f:
@@ -50,7 +30,8 @@ def load_data():
                 if error_flags['hedge'].get("HEDGING_FETCHING_BITGET_ERROR", False):
                     errors['has_error'] = True
                     errors['hedging_error'] = True
-                    errors['messages'].append("Failed to fetch Bitget hedging data")
+                    error_msg = error_flags['hedge'].get("bitget_error_message", "Failed to fetch Bitget hedging data")
+                    errors['messages'].append(f"Hedging Bitget error: {error_msg}")
                 if "last_updated_hedge" not in error_flags['hedge']:
                     logger.warning("last_updated_hedge missing in hedge_fetching_errors.json")
         else:
@@ -62,8 +43,9 @@ def load_data():
         logger.error(f"Error reading hedging error flags: {str(e)}")
         errors['has_error'] = True
         errors['hedging_error'] = True
-        errors['messages'].append("Error reading hedging error flags")
+        errors['messages'].append(f"Error reading hedging error flags: {str(e)}")
 
+    # Load LP error flags 
     try:
         if LP_ERROR_FLAGS_PATH.exists():
             with LP_ERROR_FLAGS_PATH.open('r') as f:
@@ -71,11 +53,13 @@ def load_data():
                 if error_flags['lp'].get("LP_FETCHING_KRYSTAL_ERROR", False):
                     errors['has_error'] = True
                     errors['krystal_error'] = True
-                    errors['messages'].append("Failed to fetch Krystal LP data")
+                    error_msg = error_flags['lp'].get("krystal_error_message", "Failed to fetch Krystal LP data")
+                    errors['messages'].append(f"LP Krystal error: {error_msg}")
                 if error_flags['lp'].get("LP_FETCHING_METEORA_ERROR", False):
                     errors['has_error'] = True
                     errors['meteora_error'] = True
-                    errors['messages'].append("Failed to fetch Meteora LP data")
+                    error_msg = error_flags['lp'].get("meteora_error_message", "Failed to fetch Meteora LP data")
+                    errors['messages'].append(f"LP Meteora error: {error_msg}")
                 if "last_meteora_lp_update" not in error_flags['lp']:
                     logger.warning("last_meteora_lp_update missing in lp_fetching_errors.json")
                 if "last_krystal_lp_update" not in error_flags['lp']:
@@ -91,9 +75,9 @@ def load_data():
         errors['has_error'] = True
         errors['krystal_error'] = True
         errors['meteora_error'] = True
-        errors['messages'].append("Error reading LP error flags")
+        errors['messages'].append(f"Error reading LP error flags: {str(e)}")
 
-    # Load CSVs
+    # Load CSVs 
     csv_files = {
         "Rebalancing": REBALANCING_LATEST_CSV,
         "Krystal": KRYSTAL_LATEST_CSV,
@@ -126,6 +110,7 @@ def load_data():
         'error_flags': error_flags,
         'errors': errors
     }
+
 
 def load_hedgeable_tokens() -> dict:
     """Load hedgeable tokens from JSON."""

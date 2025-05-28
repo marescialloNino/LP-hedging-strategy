@@ -7,39 +7,22 @@ import path from 'path';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 
+
+// Get data directory from environment or use default with absolute path
+const logDir = process.env.LP_HEDGE_LOG_DIR || path.join(process.cwd(), '../logs');
+const ERROR_FLAGS_PATH = path.join(logDir, 'lp_fetching_errors.json');
+
 // Define interface for error flags
 interface ErrorFlags {
   LP_FETCHING_KRYSTAL_ERROR: boolean;
   LP_FETCHING_METEORA_ERROR: boolean;
   last_meteora_lp_update: string;
   last_krystal_lp_update: string;
+  krystal_error_message: string; // New field
+  meteora_error_message: string; // New field
 }
 
-// Get data directory from environment or use default with absolute path
-const dataDir = process.env.LP_HEDGE_LOG_DIR || path.join(process.cwd(), '../logs');
-const ERROR_FLAGS_PATH = path.join(dataDir, 'lp_fetching_errors.json');
-
-// Create data directory if it doesn't exist (using sync functions for startup)
-try {
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-} catch (error) {
-  console.error('Error creating data directory:', error);
-}
-
-// Add uncaught exception and unhandled rejection handlers
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception:', { error: error.message, stack: error.stack });
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection:', { reason, promise });
-  process.exit(1);
-});
-
-// Read existing error flags to preserve timestamps
+// Read existing error flags to preserve timestamps and messages
 async function readErrorFlags(): Promise<ErrorFlags> {
   try {
     if (fs.existsSync(ERROR_FLAGS_PATH)) {
@@ -52,6 +35,8 @@ async function readErrorFlags(): Promise<ErrorFlags> {
         LP_FETCHING_METEORA_ERROR: parsed.LP_FETCHING_METEORA_ERROR || false,
         last_meteora_lp_update: parsed.last_meteora_lp_update || lastUpdate,
         last_krystal_lp_update: parsed.last_krystal_lp_update || lastUpdate,
+        krystal_error_message: parsed.krystal_error_message || '',
+        meteora_error_message: parsed.meteora_error_message || '',
       };
     }
   } catch (error) {
@@ -63,6 +48,8 @@ async function readErrorFlags(): Promise<ErrorFlags> {
     LP_FETCHING_METEORA_ERROR: false,
     last_meteora_lp_update: '',
     last_krystal_lp_update: '',
+    krystal_error_message: '',
+    meteora_error_message: '',
   };
 }
 
@@ -111,7 +98,7 @@ async function processEvmWallet(walletAddress: string): Promise<any[]> {
 async function main() {
   logger.info('Starting lp-monitor batch process...');
 
-  // Load existing error flags to preserve timestamps
+  // Load existing error flags to preserve timestamps and messages
   let errorFlags: ErrorFlags = await readErrorFlags();
 
   // Accumulate records for latest CSVs
@@ -119,6 +106,8 @@ async function main() {
   let allKrystalRecords: any[] = [];
   let meteoraSuccess = true;
   let krystalSuccess = true;
+  let meteoraErrorMessage = '';
+  let krystalErrorMessage = '';
 
   // Process Solana wallets (Meteora positions)
   for (const solWallet of config.SOLANA_WALLET_ADDRESSES) {
@@ -126,8 +115,10 @@ async function main() {
       const meteoraRecords = await processSolanaWallet(solWallet);
       allMeteoraRecords = allMeteoraRecords.concat(meteoraRecords);
     } catch (error) {
-      logger.error(`Failed to process Solana wallet ${solWallet}: ${String(error)}`);
+      const errorMsg = `Failed to process Solana wallet ${solWallet}: ${String(error)}`;
+      logger.error(errorMsg);
       meteoraSuccess = false;
+      meteoraErrorMessage += (meteoraErrorMessage ? '; ' : '') + errorMsg;
     }
   }
 
@@ -141,6 +132,7 @@ async function main() {
 
   // Update Meteora error flag and timestamp
   errorFlags.LP_FETCHING_METEORA_ERROR = !meteoraSuccess;
+  errorFlags.meteora_error_message = meteoraSuccess ? '' : meteoraErrorMessage;
   if (meteoraSuccess && allMeteoraRecords.length > 0) {
     errorFlags.last_meteora_lp_update = new Date().toISOString();
   }
@@ -151,8 +143,10 @@ async function main() {
       const krystalRecords = await processEvmWallet(evmWallet);
       allKrystalRecords = allKrystalRecords.concat(krystalRecords);
     } catch (error) {
-      logger.error(`Failed to process EVM wallet ${evmWallet}: ${String(error)}`);
+      const errorMsg = `Failed to process EVM wallet ${evmWallet}: ${String(error)}`;
+      logger.error(errorMsg);
       krystalSuccess = false;
+      krystalErrorMessage += (krystalErrorMessage ? '; ' : '') + errorMsg;
     }
   }
 
@@ -166,6 +160,7 @@ async function main() {
 
   // Update Krystal error flag and timestamp
   errorFlags.LP_FETCHING_KRYSTAL_ERROR = !krystalSuccess;
+  errorFlags.krystal_error_message = krystalSuccess ? '' : krystalErrorMessage;
   if (krystalSuccess && allKrystalRecords.length > 0) {
     errorFlags.last_krystal_lp_update = new Date().toISOString();
   }

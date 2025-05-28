@@ -131,7 +131,7 @@ async def main():
             )
 
             # Render hedging table
-            render_hedging_table(dataframes, error_flags, hedge_actions)
+            render_hedging_table(dataframes, data['errors'], hedge_actions)
         else:
             put_text("No rebalancing or hedging data available.")
 
