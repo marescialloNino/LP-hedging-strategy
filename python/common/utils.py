@@ -8,7 +8,7 @@ from common.data_loader import load_hedgeable_tokens
 HEDGABLE_TOKENS = load_hedgeable_tokens()
 
 async def run_shell_script(script_path):
-    logger = logging.getLogger('sheel_script_execution')
+    logger = logging.getLogger('shell_script_execution')
     try:
         import os
         os.chmod(script_path, 0o755)
@@ -110,8 +110,9 @@ def calculate_token_usd_value(token, krystal_df=None, meteora_df=None, use_kryst
     elif "solana" in token_info:
         has_meteora = True
 
+    # Return np.nan if the token's data source is disabled due to an error
     if (not use_krystal and has_krystal) or (not use_meteora and has_meteora):
-        return 0.0, 0.0, has_krystal, has_meteora
+        return np.nan, np.nan, has_krystal, has_meteora
 
     if use_krystal and has_krystal and krystal_df is not None and not krystal_df.empty:
         for chain, addresses in token_info.items():

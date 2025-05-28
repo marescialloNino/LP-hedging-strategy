@@ -21,6 +21,10 @@ KRYSTAL_HISTORY_CSV = DATA_DIR /"LP_krystal_positions_history.csv"
 HEDGING_HISTORY_CSV = DATA_DIR / "hedging_positions_history.csv"
 REBALANCING_HISTORY_DIR = DATA_DIR / "rebalancing_history"
 
+# ==================== error flags files ====================
+HEDGE_ERROR_FLAGS_PATH = LOG_DIR / 'hedge_fetching_errors.json'
+LP_ERROR_FLAGS_PATH = LOG_DIR / 'lp_fetching_errors.json'
+
 # ==================== pnl files ====================
 METEORA_PNL_CSV = DATA_DIR / "position_pnl_results.csv"
 KRYSTAL_POOL_PNL_CSV = DATA_DIR /"krystal_pnl_by_pool.csv"
@@ -40,6 +44,7 @@ CONFIG_DIR = ROOT_DIR / "python/config"
 HEDGEABLE_TOKENS_JSON =  CONFIG_DIR / "hedgeable_tokens.json"
 ENCOUNTERED_TOKENS_JSON =  CONFIG_DIR / "encountered_tokens.json"
 TICKER_MAPPINGS_PATH = CONFIG_DIR / "ticker_mappings.json"
+
 
 # Ensure directories exist
 LOG_DIR.mkdir(parents=True, exist_ok=True)

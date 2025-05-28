@@ -4,7 +4,7 @@ import logging
 import os
 from pathlib import Path
 from common.path_config import (
-    REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV,
+    REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV, HEDGE_ERROR_FLAGS_PATH, LP_ERROR_FLAGS_PATH,
     METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV, LOG_DIR, HEDGEABLE_TOKENS_JSON, ENCOUNTERED_TOKENS_JSON, TICKER_MAPPINGS_PATH, CONFIG_DIR
 )
 
@@ -31,8 +31,6 @@ def load_data():
             }
         }
     """
-    HEDGE_ERROR_FLAGS_PATH = Path(LOG_DIR) / 'hedge_fetching_errors.json'
-    LP_ERROR_FLAGS_PATH = Path(LOG_DIR) / 'lp_fetching_errors.json'
 
     dataframes = {}
     error_flags = {'hedge': {}, 'lp': {}}

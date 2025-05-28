@@ -64,7 +64,7 @@ def solve_v3_withdrawals(W, Pa, Pb, p, L, p_min, p_max):
     y = p * (x + L*inv_s_beta) - L*s_eta
     return x, y
 
-# ╭──────────────────── CLOSED POSITIONS ────────────────────╮
+# ──────────────────── CLOSED POSITIONS ────────────────────
 closed_raw = pd.read_csv(CLOSED_POS_CSV)
 closed_raw["opened_dt"] = pd.to_datetime(closed_raw["createdTime"], unit="s", utc=True)
 
@@ -102,7 +102,7 @@ for _, r in closed_raw.iterrows():
     detail_rows.append({
         "chainName":   r["chainName"],
         "poolAddress": r["poolAddress"],
-        "userAddress": r["userAddress"],          # ← NEW
+        "userAddress": r["userAddress"],          
         "tokenA_symbol": r["tokenA_symbol"],
         "tokenB_symbol": r["tokenB_symbol"],
         "createdTime":  r["createdTime"],
@@ -133,7 +133,7 @@ closed_agg = (
 )
 closed_agg.to_csv(CLOSED_AGG_CSV, index=False)
 
-# ╭──────────────────── OPEN POSITIONS ──────────────────────╮
+# ──────────────────── OPEN POSITIONS ──────────────────────
 open_raw  = pd.read_csv(OPEN_POS_CSV)
 open_rows: List[dict] = []
 
@@ -159,7 +159,7 @@ for _, r in open_raw.iterrows():
     open_rows.append({
         "chainName":   r["chainName"],
         "poolAddress": r["poolAddress"],
-        "userAddress": r["userAddress"],          # ← NEW
+        "userAddress": r["userAddress"],          
         "tokenA_symbol": r["tokenA_symbol"],
         "tokenB_symbol": r["tokenB_symbol"],
         "pnl_usd":     pnl_usd,
@@ -184,7 +184,7 @@ open_agg = (
     .reset_index()
 )
 
-# ╭──────────────────── MERGE & BENCHMARK ───────────────────╮
+# ──────────────────── MERGE & BENCHMARK ───────────────────
 final_df = open_agg.merge(
     closed_agg[
         ["chainName","poolAddress","userAddress",
