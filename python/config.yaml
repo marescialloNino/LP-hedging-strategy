@@ -1,0 +1,11 @@
+# Configuration file for Python modules 
+
+hedge_rebalancer:
+  # Triggers for initiating rebalancing actions
+  triggers:
+    # Positive trigger: underhedged pctg
+    positive: 0.02
+    # Negative trigger: overhedged pctg
+    negative: -0.02
+    # minimum value to trigger a rebalance
+    min_usd: 200

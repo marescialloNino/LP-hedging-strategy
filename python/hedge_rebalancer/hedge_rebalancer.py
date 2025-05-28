@@ -4,7 +4,10 @@ import sys
 import csv
 from datetime import datetime
 import json
+from .datafeed import bitgetfeed as bg
+import asyncio
 from pathlib import Path
+from config import get_config
 from common.data_loader import load_hedgeable_tokens, load_ticker_mappings
 from common.path_config import (
     LOG_DIR, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGING_LATEST_CSV,
@@ -205,11 +208,45 @@ def calculate_lp_quantities():
     
     logger.debug(f"Final LP quantities: {lp_quantities}")
     return lp_quantities
+# Set event loop policy for Windows compatibility
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+def get_token_price_usd(symbol):
+    """Fetch token price in USD using Bitget API or dataframe fallback."""
 
-def check_hedge_rebalance(positive_trigger=0.1, negative_trigger=-0.1):
+    # Fall back to Bitget API
+    async def fetch_price():
+        market = bg.BitgetMarket(account='H1')
+        try:
+            ticker = await market._exchange_async.fetch_ticker(symbol)
+            price = float(ticker.get('last', 1.0))
+            logger.debug(f"Fetched price for {symbol} from Bitget API: ${price:.2f}")
+            return price
+        except Exception as e:
+            logger.error(f"Error fetching price for {symbol} from Bitget API: {str(e)}")
+            return 1.0
+        finally:
+            await market._exchange_async.close()
+
+    # Run async fetch synchronously
+    try:
+        return asyncio.run(fetch_price())
+    except Exception as e:
+        logger.error(f"Failed to run async price fetch for {symbol}: {str(e)}")
+        return 1.0
+
+def check_hedge_rebalance():
     """Compare LP quantities with absolute hedge quantities and output results."""
-    logger.info(f"Starting hedge-rebalancer with positive_trigger={positive_trigger}, negative_trigger={negative_trigger}...")
+    # Load triggers from centralized config
+    config = get_config()
+    triggers = config.get('hedge_rebalancer', {}).get('triggers', {})
+    positive_trigger = triggers.get('positive', 0.2)
+    negative_trigger = triggers.get('negative', -0.2)
+    min_usd_trigger = triggers.get('min_usd_trigger', 200.0)
+    
+    logger.info(f"Starting hedge-rebalancer with positive_trigger={positive_trigger}, "
+                f"negative_trigger={negative_trigger}, min_usd_trigger={min_usd_trigger}...")
     
     # Sync auto_hedge_tokens.json with HEDGABLE_TOKENS before calculations
     sync_auto_hedge_tokens()
@@ -223,11 +260,13 @@ def check_hedge_rebalance(positive_trigger=0.1, negative_trigger=-0.1):
     timestamp_for_filename = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
 
     for symbol in HEDGABLE_TOKENS:
+        logger.debug(f"Processing token: {symbol}")
         hedge_qty = hedge_quantities[symbol]
         lp_qty = lp_quantities[symbol]
         abs_hedge_qty = abs(hedge_qty)
 
         if lp_qty == 0 and hedge_qty == 0:
+            logger.debug(f"Skipping {symbol}: LP and hedge quantities are zero")
             continue
 
         if lp_qty < 0:
@@ -242,43 +281,71 @@ def check_hedge_rebalance(positive_trigger=0.1, negative_trigger=-0.1):
         abs_difference = abs(difference)
         percentage_diff = (abs_difference / lp_qty) * 100 if lp_qty > 0 else 0
 
+        
         logger.info(f"Token: {symbol}")
         logger.info(f"  LP Qty: {lp_qty}, Hedged Qty: {hedge_qty} (Short: {abs_hedge_qty})")
-        logger.info(f"  Difference: {difference} ({percentage_diff:.2f}% of LP)")
+        logger.info(f"  Difference: {difference} ({percentage_diff:.2f}%) of LP")
 
-        # Standard rebalancing for all tokens
+        # Check if token is auto-hedged
+        is_auto = auto_hedge_tokens.get(symbol.replace("USDT", ""), False)
+        
+        # Initialize defaults
         rebalance_action = "nothing"
         rebalance_value = 0.0
-        if lp_qty > 0 and difference != 0:
-            if difference > 0:
-                rebalance_action = "sell"
-                rebalance_value = abs_difference
-                logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} ***")
-            else:
-                rebalance_action = "buy"
-                rebalance_value = abs_difference
-                logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} ***")
-        elif lp_qty == 0 and hedge_qty != 0:
-            rebalance_action = "buy"
-            rebalance_value = abs_hedge_qty
-            logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} (no LP exposure) ***")
-
-        # Auto-hedging trigger for auto-hedged tokens
-        is_auto = auto_hedge_tokens.get(symbol.replace("USDT", ""), False)
         trigger_auto_order = False
-        
-        if is_auto and lp_qty > 0:
-            if hedge_qty == 0:
-                trigger_auto_order = True
-                logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty:.5f} for {symbol} (no hedge position) ***")
-            elif hedge_qty < 0:
-                ratio = (lp_qty / abs_hedge_qty) - 1
-                if ratio > positive_trigger:
+
+        if is_auto:
+
+            # Calculate USD difference
+            price_usd = get_token_price_usd(symbol)
+            usd_difference = abs_difference * price_usd
+            # Auto-hedge: Apply full rebalancing logic with USD trigger
+            skip_rebalance = usd_difference < min_usd_trigger
+
+            if skip_rebalance:
+                logger.info(f"  Skipping rebalance for {symbol}: USD difference ${usd_difference:.2f} < ${min_usd_trigger}")
+            elif lp_qty > 0 and difference != 0:
+                if difference > 0:
+                    rebalance_action = "sell"
+                    rebalance_value = abs_difference
+                    logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} ***")
+                else:
+                    rebalance_action = "buy"
+                    rebalance_value = abs_difference
+                    logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} ***")
+            elif lp_qty == 0 and hedge_qty != 0:
+                rebalance_action = "buy"
+                rebalance_value = abs_hedge_qty
+                logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} (no LP exposure) ***")
+
+            # Auto-hedging triggers
+            if lp_qty > 0:
+                if skip_rebalance:
+                    logger.info(f"  Skipping auto-hedge for {symbol}: USD difference ${usd_difference:.2f} < ${min_usd_trigger}")
+                elif hedge_qty == 0:
                     trigger_auto_order = True
-                    logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty - abs_hedge_qty:.5f} for {symbol} (ratio: {ratio:.2f}) ***")
-                elif ratio < negative_trigger:
-                    trigger_auto_order = True
-                    logger.warning(f"  *** AUTO HEDGE TRIGGER: buy {abs_hedge_qty - lp_qty:.5f} for {symbol} (ratio: {ratio:.2f}) ***")
+                    logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty:.5f} for {symbol} (no hedge position) ***")
+                elif hedge_qty < 0:
+                    ratio = (lp_qty / abs_hedge_qty) - 1
+                    if ratio > positive_trigger:
+                        trigger_auto_order = True
+                        logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty - abs_hedge_qty:.5f} for {symbol} (ratio: {ratio:.2f}) ***")
+                    elif ratio < negative_trigger:
+                        trigger_auto_order = True
+                        logger.warning(f"  *** AUTO HEDGE TRIGGER: buy {abs_hedge_qty - lp_qty:.5f} for {symbol} (ratio: {ratio:.2f}) ***")
+        else:
+            # Non-auto-hedge: Suggest action based on difference
+            if difference != 0:
+                if difference > 0:
+                    rebalance_action = "sell"
+                    rebalance_value = abs_difference
+                    logger.info(f"  Non-auto-hedge token {symbol}: Suggest {rebalance_action} {rebalance_value:.5f} for manual rebalancing")
+                else:
+                    rebalance_action = "buy"
+                    rebalance_value = abs_difference
+                    logger.info(f"  Non-auto-hedge token {symbol}: Suggest {rebalance_action} {rebalance_value:.5f}  for manual rebalancing")
+            else:
+                logger.info(f"  Non-auto-hedge token {symbol}: No rebalancing needed (difference = 0)")
 
         rebalance_results.append({
             "Timestamp": timestamp_for_csv,
@@ -302,7 +369,7 @@ def check_hedge_rebalance(positive_trigger=0.1, negative_trigger=-0.1):
         
         headers = [
             "Timestamp", "Token", "LP Qty", "Hedged Qty", "Difference",
-            "Percentage Diff", "Rebalance Action", "Rebalance Value",
+            "Percentage Diff", "USD Difference", "Rebalance Action", "Rebalance Value",
             "Auto Hedge", "Trigger Auto Order"
         ]
         
@@ -319,6 +386,7 @@ def check_hedge_rebalance(positive_trigger=0.1, negative_trigger=-0.1):
         logger.info(f"Latest rebalancing results written to: {latest_filename}")
 
     logger.info("Hedge rebalance check completed.")
+    return rebalance_results
 
 if __name__ == "__main__":
     check_hedge_rebalance()
