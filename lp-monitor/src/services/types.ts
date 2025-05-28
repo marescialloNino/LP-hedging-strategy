@@ -62,3 +62,16 @@ export interface KrystalPositionInfo {
   tokenXPriceUsd: number; // Token X price in USD
   tokenYPriceUsd: number; // Token Y price in USD
 }
+
+
+interface ErrorFlags {
+  LP_FETCHING_METEORA_ERROR: boolean;
+  meteora_error_message: string;
+  last_meteora_lp_update: string;
+  LP_FETCHING_KRYSTAL_ERROR: boolean;
+  krystal_error_message: string;
+  last_krystal_lp_update: string;
+  LP_FETCHING_VAULT_ERROR: boolean;
+  vault_error_message: string;
+  last_vault_lp_update: string;
+}

@@ -12,14 +12,16 @@ import fsPromises from 'fs/promises';
 const logDir = process.env.LP_HEDGE_LOG_DIR || path.join(process.cwd(), '../logs');
 const ERROR_FLAGS_PATH = path.join(logDir, 'lp_fetching_errors.json');
 
-// Define interface for error flags
 interface ErrorFlags {
-  LP_FETCHING_KRYSTAL_ERROR: boolean;
   LP_FETCHING_METEORA_ERROR: boolean;
+  meteora_error_message: string;
   last_meteora_lp_update: string;
+  LP_FETCHING_KRYSTAL_ERROR: boolean;
+  krystal_error_message: string;
   last_krystal_lp_update: string;
-  krystal_error_message: string; // New field
-  meteora_error_message: string; // New field
+  LP_FETCHING_VAULT_ERROR: boolean;
+  vault_error_message: string;
+  last_vault_lp_update: string;
 }
 
 // Read existing error flags to preserve timestamps and messages
@@ -33,10 +35,13 @@ async function readErrorFlags(): Promise<ErrorFlags> {
       return {
         LP_FETCHING_KRYSTAL_ERROR: parsed.LP_FETCHING_KRYSTAL_ERROR || false,
         LP_FETCHING_METEORA_ERROR: parsed.LP_FETCHING_METEORA_ERROR || false,
+        LP_FETCHING_VAULT_ERROR: parsed.LP_FETCHING_KRYSTAL_ERROR || false,
         last_meteora_lp_update: parsed.last_meteora_lp_update || lastUpdate,
         last_krystal_lp_update: parsed.last_krystal_lp_update || lastUpdate,
+        last_vault_lp_update: parsed.last_krystal_lp_update || lastUpdate,
         krystal_error_message: parsed.krystal_error_message || '',
         meteora_error_message: parsed.meteora_error_message || '',
+        vault_error_message: parsed.meteora_error_message || '',
       };
     }
   } catch (error) {
@@ -46,10 +51,13 @@ async function readErrorFlags(): Promise<ErrorFlags> {
   return {
     LP_FETCHING_KRYSTAL_ERROR: false,
     LP_FETCHING_METEORA_ERROR: false,
+    LP_FETCHING_VAULT_ERROR: false,
     last_meteora_lp_update: '',
     last_krystal_lp_update: '',
+    last_vault_lp_update: '',
     krystal_error_message: '',
     meteora_error_message: '',
+    vault_error_message: '',
   };
 }
 
@@ -81,17 +89,27 @@ async function processSolanaWallet(walletAddress: string): Promise<any[]> {
 
 async function processEvmWallet(walletAddress: string): Promise<any[]> {
   logger.info(`Processing EVM wallet: ${walletAddress}`);
-  try {
-    const krystalPositions = await retrieveKrystalPositions(walletAddress);
-    if (krystalPositions.length > 0) {
-      const records = await generateKrystalCSV(walletAddress, krystalPositions);
-      return records;
-    } else {
-      logger.info(`No Krystal positions found for ${walletAddress}`);
-      return [];
-    }
-  } catch (error) {
-    throw error; // Rethrow to ensure main() catches it
+  const chainIds = config.KRYSTAL_CHAIN_IDS.join(',');
+  const krystalPositions = await retrieveKrystalPositions(walletAddress, chainIds);
+  if (krystalPositions.length > 0) {
+    const records = await generateKrystalCSV(walletAddress, krystalPositions);
+    return records;
+  } else {
+    logger.info(`No Krystal positions found for ${walletAddress} on chains ${chainIds}`);
+    return [];
+  }
+}
+
+async function processEvmVaultWallet(walletAddress: string, chainIds: string[]): Promise<any[]> {
+  logger.info(`Processing EVM vault wallet: ${walletAddress} on chain: ${chainIds.join(',')}`);
+  const chainIdsStr = chainIds.join(',');
+  const krystalPositions = await retrieveKrystalPositions(walletAddress, chainIdsStr);
+  if (krystalPositions.length > 0) {
+    const records = await generateKrystalCSV(walletAddress, krystalPositions);
+    return records;
+  } else {
+    logger.info(`No Krystal positions found for vault wallet ${walletAddress} on chains ${chainIdsStr}`);
+    return [];
   }
 }
 
@@ -106,8 +124,10 @@ async function main() {
   let allKrystalRecords: any[] = [];
   let meteoraSuccess = true;
   let krystalSuccess = true;
+  let vaultSuccess = true;
   let meteoraErrorMessage = '';
   let krystalErrorMessage = '';
+  let vaultErrorMessage = '';
 
   // Process Solana wallets (Meteora positions)
   for (const solWallet of config.SOLANA_WALLET_ADDRESSES) {
@@ -137,8 +157,13 @@ async function main() {
     errorFlags.last_meteora_lp_update = new Date().toISOString();
   }
 
-  // Process EVM wallets (Krystal positions)
+  // Process normal EVM wallets (Krystal positions)
   for (const evmWallet of config.EVM_WALLET_ADDRESSES) {
+    // Skip if wallet is a vault wallet to avoid duplicate processing
+    if (Object.keys(config.KRYSTAL_VAULT_WALLET_CHAIN_MAP).includes(evmWallet)) {
+      logger.warn(`Skipping wallet ${evmWallet} in normal processing as it is a vault wallet`);
+      continue;
+    }
     try {
       const krystalRecords = await processEvmWallet(evmWallet);
       allKrystalRecords = allKrystalRecords.concat(krystalRecords);
@@ -147,6 +172,19 @@ async function main() {
       logger.error(errorMsg);
       krystalSuccess = false;
       krystalErrorMessage += (krystalErrorMessage ? '; ' : '') + errorMsg;
+    }
+  }
+
+  // Process vault EVM wallets (Krystal positions)
+  for (const [vaultWallet, chainIds] of Object.entries(config.KRYSTAL_VAULT_WALLET_CHAIN_MAP)) {
+    try {
+      const krystalRecords = await processEvmVaultWallet(vaultWallet, chainIds);
+      allKrystalRecords = allKrystalRecords.concat(krystalRecords);
+    } catch (error) {
+      const errorMsg = `Failed to process vault wallet ${vaultWallet}: ${String(error)}`;
+      logger.error(errorMsg);
+      vaultSuccess = false;
+      vaultErrorMessage += (vaultErrorMessage ? '; ' : '') + errorMsg;
     }
   }
 
@@ -163,6 +201,13 @@ async function main() {
   errorFlags.krystal_error_message = krystalSuccess ? '' : krystalErrorMessage;
   if (krystalSuccess && allKrystalRecords.length > 0) {
     errorFlags.last_krystal_lp_update = new Date().toISOString();
+  }
+
+  // Update vault error flag and timestamp
+  errorFlags.LP_FETCHING_VAULT_ERROR = !vaultSuccess;
+  errorFlags.vault_error_message = vaultSuccess ? '' : vaultErrorMessage;
+  if (vaultSuccess && allKrystalRecords.length > 0) {
+    errorFlags.last_vault_lp_update = new Date().toISOString();
   }
 
   // Write updated error flags

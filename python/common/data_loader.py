@@ -19,6 +19,7 @@ def load_data():
         'krystal_error': False,
         'meteora_error': False,
         'hedging_error': False,
+        'vault_error': False,  # Added vault_error
         'messages': []
     }
 
@@ -60,21 +61,30 @@ def load_data():
                     errors['meteora_error'] = True
                     error_msg = error_flags['lp'].get("meteora_error_message", "Failed to fetch Meteora LP data")
                     errors['messages'].append(f"LP Meteora error: {error_msg}")
+                if error_flags['lp'].get("LP_FETCHING_VAULT_ERROR", False):
+                    errors['has_error'] = True
+                    errors['vault_error'] = True
+                    error_msg = error_flags['lp'].get("vault_error_message", "Failed to fetch vault LP data")
+                    errors['messages'].append(f"LP Vault error: {error_msg}")
                 if "last_meteora_lp_update" not in error_flags['lp']:
                     logger.warning("last_meteora_lp_update missing in lp_fetching_errors.json")
                 if "last_krystal_lp_update" not in error_flags['lp']:
                     logger.warning("last_krystal_lp_update missing in lp_fetching_errors.json")
+                if "last_vault_lp_update" not in error_flags['lp']:
+                    logger.warning("last_vault_lp_update missing in lp_fetching_errors.json")
         else:
             logger.warning(f"LP error flags file not found: {LP_ERROR_FLAGS_PATH}")
             errors['has_error'] = True
             errors['krystal_error'] = True
             errors['meteora_error'] = True
+            errors['vault_error'] = True
             errors['messages'].append("LP error flags file missing")
     except Exception as e:
         logger.error(f"Error reading LP error flags: {str(e)}")
         errors['has_error'] = True
         errors['krystal_error'] = True
         errors['meteora_error'] = True
+        errors['vault_error'] = True
         errors['messages'].append(f"Error reading LP error flags: {str(e)}")
 
     # Load CSVs 

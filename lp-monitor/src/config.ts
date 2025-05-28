@@ -16,4 +16,14 @@ export const config = {
   KRYSTAL_CHAIN_IDS: process.env.KRYSTAL_CHAIN_IDS
   ? process.env.KRYSTAL_CHAIN_IDS.split(',').map(id => id.trim())
   : ['137','56','42161'], // Default to Polygon (chain ID 137), add more as needed
+  KRYSTAL_VAULT_WALLET_CHAIN_MAP: process.env.KRYSTAL_VAULT_WALLET_CHAIN_IDS
+    ? process.env.KRYSTAL_VAULT_WALLET_CHAIN_IDS.split(';').reduce((map, pair) => {
+        const [wallet, chainsStr] = pair.split(':');
+        if (wallet && chainsStr) {
+          const chains = chainsStr.split(',').map(id => id.trim());
+          map[wallet.trim()] = chains;
+        }
+        return map;
+      }, {} as Record<string, string[]>)
+    : {},
 };

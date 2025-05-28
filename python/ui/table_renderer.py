@@ -137,7 +137,7 @@ def render_pnl_tables(dataframes, error_flags):
     Render PnL tables for Meteora and Krystal.
     """
     meteora_error = error_flags.get('meteora_error', False)
-    krystal_error = error_flags.get('krystal_error', False)
+    krystal_error = error_flags.get('krystal_error', False) or error_flags.get('vault_error', False)
 
     if "Meteora PnL" in dataframes and not meteora_error:
         put_markdown("## Meteora Positions PnL")
@@ -203,7 +203,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
         error_flags (dict): Error flags from data_loader
         hedge_actions (HedgeActions): Instance for handling hedge/close actions
     """
-    krystal_error = error_flags.get('krystal_error', False)
+    krystal_error = error_flags.get('krystal_error', False) or error_flags.get('vault_error', False)
     meteora_error = error_flags.get('meteora_error', False)
     hedging_error = error_flags.get('hedging_error', False)
     krystal_df = dataframes.get("Krystal")
