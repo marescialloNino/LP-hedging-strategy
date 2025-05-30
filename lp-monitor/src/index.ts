@@ -1,6 +1,6 @@
 import { config } from './config';
 import { retrieveMeteoraPositions } from './services/meteoraPositionService';
-import { retrieveKrystalPositions } from './services/krystalPositionService';
+import { retrieveKrystalPositions, retrieveKrystalVaultPositions } from './services/krystalPositionService';
 import { generateMeteoraCSV, generateKrystalCSV, writeMeteoraLatestCSV, writeKrystalLatestCSV } from './services/csvService';
 import { logger } from './utils/logger';
 import path from 'path';
@@ -100,10 +100,10 @@ async function processEvmWallet(walletAddress: string): Promise<any[]> {
   }
 }
 
-async function processEvmVaultWallet(walletAddress: string, chainIds: string[]): Promise<any[]> {
+async function processEvmVaultWallet(walletAddress: string, chainIds: string[], vaultShare: number): Promise<any[]> {
   logger.info(`Processing EVM vault wallet: ${walletAddress} on chain: ${chainIds.join(',')}`);
   const chainIdsStr = chainIds.join(',');
-  const krystalPositions = await retrieveKrystalPositions(walletAddress, chainIdsStr);
+  const krystalPositions = await retrieveKrystalVaultPositions(walletAddress, chainIdsStr, vaultShare);
   if (krystalPositions.length > 0) {
     const records = await generateKrystalCSV(walletAddress, krystalPositions);
     return records;
@@ -175,18 +175,19 @@ async function main() {
     }
   }
 
-  // Process vault EVM wallets (Krystal positions)
-  for (const [vaultWallet, chainIds] of Object.entries(config.KRYSTAL_VAULT_WALLET_CHAIN_MAP)) {
-    try {
-      const krystalRecords = await processEvmVaultWallet(vaultWallet, chainIds);
-      allKrystalRecords = allKrystalRecords.concat(krystalRecords);
-    } catch (error) {
-      const errorMsg = `Failed to process vault wallet ${vaultWallet}: ${String(error)}`;
-      logger.error(errorMsg);
-      vaultSuccess = false;
-      vaultErrorMessage += (vaultErrorMessage ? '; ' : '') + errorMsg;
-    }
+// Process vault EVM wallets (Krystal positions)
+for (const [vaultWallet, entry] of Object.entries(config.KRYSTAL_VAULT_WALLET_CHAIN_MAP) as [string, { chains: string[]; vaultShare: number }][]) {
+  try {
+    const { chains, vaultShare } = entry;
+    const krystalRecords = await processEvmVaultWallet(vaultWallet, chains, vaultShare);
+    allKrystalRecords = allKrystalRecords.concat(krystalRecords);
+  } catch (error) {
+    const errorMsg = `Failed to process vault wallet ${vaultWallet}: ${String(error)}`;
+    logger.error(errorMsg);
+    vaultSuccess = false;
+    vaultErrorMessage += (vaultErrorMessage ? '; ' : '') + errorMsg;
   }
+}
 
   // Write Krystal latest positions
   if (allKrystalRecords.length > 0) {

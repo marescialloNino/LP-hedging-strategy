@@ -1,0 +1,24 @@
+
+rpc_endpoint: "https://rpc-proxy.segfaultx0.workers.dev"
+
+solana_wallet_addresses:
+  - "Yj7SzJwGkHuUKBfFytp8TPfj997ntSicCCuJLiB39kE"
+  - "4Qmf2vs3CS93xQgyfNbaPv5KqY7rqWJ1njyJpHHKSY1P"
+
+evm_wallet_addresses:
+  - "0xc42de00a218ce8c02506f09448e8b92a430f8f71"
+  - "0x439f3e3aeb991155923b2e9d79b40169c38238c6"
+  - "0x16995C1049019e3c93B406eD6D952468F9a1ef9b"
+
+krystal_chain_ids:
+  - "1" # Ethereum
+  - "137" # Polygon
+  - "56" # BSC
+  - "42161" # Arbitrum
+  - "146" # Sonic
+  - "8453" # Base
+
+krystal_vault_wallet_chain_ids:
+  - wallet: "0xfaee232ed47700c4040e72ac1687bb8d05dc2dd4"
+    chains: ["137"]
+    vault_share: 0.931

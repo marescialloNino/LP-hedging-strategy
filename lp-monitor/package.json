@@ -8,15 +8,17 @@
     "pnlMeteora": "tsc && node dist/meteoraCalculations.js"
   },
   "dependencies": {
-    "@meteora-ag/dlmm": "1.5.0",
     "@coral-xyz/anchor": "0.30.1",
+    "@meteora-ag/dlmm": "1.5.0",
     "@solana/spl-token": "0.4.8",
     "@solana/web3.js": "1.98.2",
+    "@types/js-yaml": "^4.0.9",
     "axios": "1.7.7",
     "bn.js": "5.2.1",
     "csv-parser": "3.0.0",
     "csv-writer": "1.6.0",
     "dotenv": "16.4.5",
+    "js-yaml": "^4.1.0",
     "node-cron": "3.0.3",
     "winston": "3.15.0"
   },
