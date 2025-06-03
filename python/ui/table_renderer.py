@@ -253,7 +253,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 token_summary["amount"] = token_summary["amount"].fillna(0)
                 token_summary["funding_rate"] = token_summary["funding_rate"].fillna(0)
             else:
-                token_summary = token_agg
+                token_summary = rebalancing_df
                 token_summary["quantity"] = 0
                 token_summary["amount"] = 0
                 token_summary["funding_rate"] = 0
@@ -333,6 +333,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
                 token_data.append([
                     token,
+                    lp_amount_usd,  # Store raw value for sorting
                     f"{lp_amount_usd:.2f}" if pd.notna(lp_amount_usd) else "N/A",
                     f"{hedge_amount:.4f}" if pd.notna(hedge_amount) else "N/A",
                     f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
@@ -374,14 +375,9 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
                 # Calculate Hedge Qty/LP Qty (%)
                 hedge_qty_ratio = (hedged_qty / lp_qty * 100) if pd.notna(hedged_qty) and pd.notna(lp_qty) and lp_qty != 0 else np.nan
-                if is_auto:
-                    rebalance_value = np.nan
-                    action = ""
-                    suggested_hedge_ratio = np.nan
-                else:
-                    action = ""
-                    rebalance_value = np.nan
-                    suggested_hedge_ratio = np.nan
+                action = ""
+                rebalance_value = np.nan
+                suggested_hedge_ratio = np.nan
 
                 action_buttons = []
                 if not is_auto and abs(hedged_qty) > 0:
@@ -401,9 +397,10 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
                 token_data.append([
                     token,
+                    lp_amount_usd,  # Store raw value for sorting
                     f"{lp_amount_usd:.2f}" if pd.notna(lp_amount_usd) else "N/A",
                     f"{hedge_amount:.4f}" if pd.notna(hedge_amount) else "N/A",
-                    f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
+                    f"{lp_qty:.6f}" if pd.notna(lp_qty) else "N/A",
                     f"{hedge_qty_ratio:.2f}%" if pd.notna(hedge_qty_ratio) else "N/A",
                     f"{suggested_hedge_ratio:.2f}%" if pd.notna(suggested_hedge_ratio) else "N/A",
                     button,
@@ -411,7 +408,15 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 ])
 
         if token_data:
-            put_table(token_data, header=token_headers)
+            # Sort token_data by lp_amount_usd (index 1) in descending order, handling "N/A" values
+            token_data_sorted = sorted(
+                token_data,
+                key=lambda x: x[1] if pd.notna(x[1]) else float('-inf'),
+                reverse=True
+            )
+            # Remove the raw lp_amount_usd value (index 1) from each row before rendering
+            token_data_sorted = [row[0:1] + row[2:] for row in token_data_sorted]
+            put_table(token_data_sorted, header=token_headers)
         else:
             put_text("No rebalancing or hedging data available.")
     else:
