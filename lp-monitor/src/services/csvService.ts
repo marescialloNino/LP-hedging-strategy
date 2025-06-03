@@ -145,6 +145,7 @@ export async function generateKrystalCSV(walletAddress: string, positions: Kryst
     const tokenYPriceUsd = pos.tokenYPriceUsd || 0;
     const tokenXUsdAmount = tokenXQty * tokenXPriceUsd;
     const tokenYUsdAmount = tokenYQty * tokenYPriceUsd;
+    const tvl = pos.tvl;
 
     const record = {
       timestamp: new Date().toISOString(),
@@ -172,6 +173,7 @@ export async function generateKrystalCSV(walletAddress: string, positions: Kryst
       feeApr: pos.feeApr,
       tokenXUsdAmount,
       tokenYUsdAmount,
+      tvl
     };
 
     return record;
@@ -236,6 +238,7 @@ export const KRYSTAL_LATEST_HEADERS = [
   { id: 'feeApr', title: 'Fee APR' },
   { id: 'tokenXUsdAmount', title: 'Token X USD Amount' },
   { id: 'tokenYUsdAmount', title: 'Token Y USD Amount' },
+  { id: 'tvl', title: 'tvl' },
 ];
 
 export async function writeMeteoraLatestCSV(records: any[]): Promise<void> {

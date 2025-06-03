@@ -5,7 +5,7 @@ node_modules
 *.bat
 web_broker.py
 
-
+/kamino-positions
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

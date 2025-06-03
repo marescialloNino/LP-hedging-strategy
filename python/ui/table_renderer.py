@@ -72,7 +72,7 @@ def render_wallet_positions(dataframes, error_flags):
     meteora_error = error_flags.get('meteora_error', False)
     wallet_headers = [
         "Source", "Wallet", "Chain", "Protocol", "Pair", "In Range", "Fee APR", "Initial USD", "Present USD",
-        "Token X Qty", "Token Y Qty", "Current Price", "Min Price", "Max Price", "Pool Address"
+        "Price Position %", "Width %", "TVL (USD)", "My TVL/TVL %", "Pool Address"
     ]
     wallet_data = []
 
@@ -82,6 +82,15 @@ def render_wallet_positions(dataframes, error_flags):
         for _, row in krystal_df.iterrows():
             pair_ticker = (f"{row['Token X Symbol']}-{row['Token Y Symbol']}" if ticker_source == "symbol"
                           else f"{row['Token X Address'][:5]}...-{row['Token Y Address'][:5]}...")
+            # Calculate Price Position % and Width %
+            current_price = float(row["Current Price"]) if pd.notna(row["Current Price"]) else np.nan
+            min_price = float(row["Min Price"]) if pd.notna(row["Min Price"]) else np.nan
+            max_price = float(row["Max Price"]) if pd.notna(row["Max Price"]) else np.nan
+            price_position = ((current_price - min_price) / (max_price - min_price) * 100) if pd.notna(current_price) and pd.notna(min_price) and pd.notna(max_price) and max_price != min_price else np.nan
+            width = ((max_price / min_price - 1) * 100) if pd.notna(max_price) and pd.notna(min_price) and min_price != 0 else np.nan
+            tvl = float(row["tvl"]) if pd.notna(row["tvl"]) else np.nan
+            actual_value_usd = float(row["Actual Value USD"]) if pd.notna(row["Actual Value USD"]) else np.nan
+            my_tvl_ratio = (actual_value_usd / tvl * 100) if pd.notna(actual_value_usd) and pd.notna(tvl) and tvl != 0 else np.nan
             wallet_data.append([
                 "Krystal",
                 truncate_wallet(row["Wallet Address"]),
@@ -91,12 +100,11 @@ def render_wallet_positions(dataframes, error_flags):
                 "Yes" if row["Is In Range"] else "No",
                 f"{row['Fee APR']:.2%}" if pd.notna(row["Fee APR"]) else "N/A",
                 f"{row['Initial Value USD']:.2f}" if pd.notna(row["Initial Value USD"]) else "N/A",
-                f"{row['Actual Value USD']:.2f}" if pd.notna(row["Actual Value USD"]) else "N/A",
-                row["Token X Qty"],
-                row["Token Y Qty"],
-                f"{row['Current Price']:.6f}" if pd.notna(row["Current Price"]) else "N/A",
-                f"{row['Min Price']:.6f}" if pd.notna(row["Min Price"]) else "N/A",
-                f"{row['Max Price']:.6f}" if pd.notna(row["Max Price"]) else "N/A",
+                f"{actual_value_usd:.2f}" if pd.notna(actual_value_usd) else "N/A",
+                f"{price_position:.2f}%" if pd.notna(price_position) else "N/A",
+                f"{width:.2f}%" if pd.notna(width) else "N/A",
+                f"{tvl:.2f}" if pd.notna(tvl) else "N/A",
+                f"{my_tvl_ratio:.2f}%" if pd.notna(my_tvl_ratio) else "N/A",
                 row["Pool Address"]
             ])
 
@@ -109,6 +117,13 @@ def render_wallet_positions(dataframes, error_flags):
             price_x = float(row["Token X Price USD"]) if pd.notna(row["Token X Price USD"]) else 0
             price_y = float(row["Token Y Price USD"]) if pd.notna(row["Token Y Price USD"]) else 0
             present_usd = (qty_x * price_x) + (qty_y * price_y)
+            # Meteora uses Lower/Upper Boundary instead of Min/Max Price
+            current_price = float(price_x/price_y) if pd.notna(price_x) and pd.notna(price_y) and price_y != 0 else np.nan
+            min_price = float(row["Lower Boundary"]) if pd.notna(row["Lower Boundary"]) else np.nan
+            max_price = float(row["Upper Boundary"]) if pd.notna(row["Upper Boundary"]) else np.nan
+            # For Meteora, Current Price is not available, so set Price Position % to N/A
+            price_position = ((current_price - min_price) / (max_price - min_price) * 100) if pd.notna(current_price) and pd.notna(min_price) and pd.notna(max_price) and max_price != min_price else np.nan  
+            width = ((max_price / min_price - 1) * 100) if pd.notna(max_price) and pd.notna(min_price) and min_price != 0 else np.nan
             wallet_data.append([
                 "Meteora",
                 truncate_wallet(row["Wallet Address"]),
@@ -119,11 +134,10 @@ def render_wallet_positions(dataframes, error_flags):
                 "N/A",
                 "N/A",
                 f"{present_usd:.2f}",
-                row["Token X Qty"],
-                row["Token Y Qty"],
+                f"{price_position:.2f}%",  # Price Position % not available for Meteora
+                f"{width:.2f}%" if pd.notna(width) else "N/A",
                 "N/A",
-                f"{row['Lower Boundary']:.6f}" if pd.notna(row["Lower Boundary"]) else "N/A",
-                f"{row['Upper Boundary']:.6f}" if pd.notna(row["Upper Boundary"]) else "N/A",
+                "N/A",
                 row["Pool Address"]
             ])
 
@@ -142,7 +156,7 @@ def render_pnl_tables(dataframes, error_flags):
     if "Meteora PnL" in dataframes and not meteora_error:
         put_markdown("## Meteora Positions PnL")
         pnl_headers = [
-            "Timestamp", "Owner", "Pair", "Realized PNL (USD)", "Unrealized PNL (USD)", "Net PNL (USD)",
+            "Chain", "Owner", "Pair", "Realized PNL (USD)", "Unrealized PNL (USD)", "Net PNL (USD)",
             "Realized PNL (Token B)", "Unrealized PNL (Token B)", "Net PNL (Token B)", "Position ID", "Pool Address"
         ]
         pnl_data = []
@@ -150,7 +164,7 @@ def render_pnl_tables(dataframes, error_flags):
         for _, row in meteora_pnl_df.iterrows():
             pair = f"{row['Token X Symbol']}-{row['Token Y Symbol']}"
             pnl_data.append([
-                row["Timestamp"],
+                "solana",
                 truncate_wallet(row["Owner"]),
                 pair,
                 f"{row['Realized PNL (USD)']:.2f}",
@@ -168,7 +182,7 @@ def render_pnl_tables(dataframes, error_flags):
             put_text("No PnL data found in Meteora PnL CSV.")
 
     if "Krystal PnL" in dataframes and not krystal_error:
-        put_markdown("## Krystal Positions PnL by Pool (Open Pools)")
+        put_markdown("## Krystal Positions PnL by Pool (Open Positions Only)")
         k_pnl_df = dataframes["Krystal PnL"].copy()
         for col in ["earliest_createdTime", "hold_pnl_usd", "lp_minus_hold_usd", "lp_pnl_usd"]:
             if col not in k_pnl_df.columns:
@@ -212,8 +226,9 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
     if "Rebalancing" in dataframes or "Hedging" in dataframes:
         token_headers = [
-            "Token", "LP Amount USD", "Hedge Amount USD", "LP Qty", "Hedge Qty",
-            "Suggested Hedge Qty", "Action", "Funding Rate (BIPS)"
+            "Token", "LP Amount USD", "Hedge Amount USD", "LP Qty", 
+            "Hedge Qty/LP Qty (%)", "Suggested Hedge Qty/LP Qty (%)", 
+            "Action", "Funding Rate (BIPS)"
         ]
         token_data = []
 
@@ -265,9 +280,12 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 funding_rate = row["funding_rate"] * 10000
                 is_auto = auto_hedge_tokens.get(token, False)
 
+                # Calculate Hedge Qty/LP Qty (%) and Suggested Hedge Qty/LP Qty (%)
+                hedge_qty_ratio = (hedged_qty / lp_qty * 100) if pd.notna(hedged_qty) and pd.notna(lp_qty) and lp_qty != 0 else np.nan
                 if is_auto:
                     rebalance_value = np.nan
                     action = ""
+                    suggested_hedge_ratio = np.nan
                 else:
                     action = row["Rebalance Action"].strip().lower() if pd.notna(row["Rebalance Action"]) else ""
                     rebalance_value = row["Rebalance Value"] if pd.notna(row["Rebalance Value"]) else np.nan
@@ -275,6 +293,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                         rebalance_value = abs(rebalance_value) if pd.notna(rebalance_value) else np.nan
                     elif action == "sell":
                         rebalance_value = -abs(rebalance_value) if pd.notna(rebalance_value) else np.nan
+                    suggested_hedge_ratio = (rebalance_value / lp_qty * 100) if pd.notna(rebalance_value) and pd.notna(lp_qty) and lp_qty != 0 else np.nan
 
                 # Error handling for hedging data
                 if hedging_error:
@@ -283,6 +302,8 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     funding_rate = np.nan
                     rebalance_value = np.nan
                     action = ""
+                    hedge_qty_ratio = np.nan
+                    suggested_hedge_ratio = np.nan
 
                 hedge_button = None
                 close_button = None
@@ -315,8 +336,8 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     f"{lp_amount_usd:.2f}" if pd.notna(lp_amount_usd) else "N/A",
                     f"{hedge_amount:.4f}" if pd.notna(hedge_amount) else "N/A",
                     f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
-                    f"{hedged_qty:.4f}" if pd.notna(hedged_qty) else "N/A",
-                    f"{rebalance_value:.6f}" if pd.notna(rebalance_value) else "N/A",
+                    f"{hedge_qty_ratio:.2f}%" if pd.notna(hedge_qty_ratio) else "N/A",
+                    f"{suggested_hedge_ratio:.2f}%" if pd.notna(suggested_hedge_ratio) else "N/A",
                     button,
                     f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
                 ])
@@ -351,12 +372,16 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 funding_rate = row["funding_rate"] * 10000
                 is_auto = auto_hedge_tokens.get(token, False)
 
+                # Calculate Hedge Qty/LP Qty (%)
+                hedge_qty_ratio = (hedged_qty / lp_qty * 100) if pd.notna(hedged_qty) and pd.notna(lp_qty) and lp_qty != 0 else np.nan
                 if is_auto:
                     rebalance_value = np.nan
                     action = ""
+                    suggested_hedge_ratio = np.nan
                 else:
                     action = ""
                     rebalance_value = np.nan
+                    suggested_hedge_ratio = np.nan
 
                 action_buttons = []
                 if not is_auto and abs(hedged_qty) > 0:
@@ -379,8 +404,8 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     f"{lp_amount_usd:.2f}" if pd.notna(lp_amount_usd) else "N/A",
                     f"{hedge_amount:.4f}" if pd.notna(hedge_amount) else "N/A",
                     f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
-                    f"{hedged_qty:.4f}" if pd.notna(hedged_qty) else "N/A",
-                    f"{rebalance_value:.6f}" if pd.notna(rebalance_value) else "N/A",
+                    f"{hedge_qty_ratio:.2f}%" if pd.notna(hedge_qty_ratio) else "N/A",
+                    f"{suggested_hedge_ratio:.2f}%" if pd.notna(suggested_hedge_ratio) else "N/A",
                     button,
                     f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
                 ])
@@ -391,6 +416,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
             put_text("No rebalancing or hedging data available.")
     else:
         put_text("No rebalancing or hedging data available.")
+
 
 def render_hedge_automation():
     """
