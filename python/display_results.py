@@ -50,7 +50,7 @@ async def main():
     with use_scope('dashboard', clear=True):
         put_markdown("# 🔮 🧙‍♂️ 🧪 💸 CM's Hedging Dashboard 💸 🧪 🧙‍♂️ 🔮")
 
-        put_text("\nWhat goes up, must come down.\n- Isaac Newton")
+        put_text("\nMy wife's boyfriend says Bitcoin has no intrinsic value.")
 
 
         HEDGABLE_TOKENS = load_hedgeable_tokens()
