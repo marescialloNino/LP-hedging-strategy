@@ -57,8 +57,14 @@ LP Hedging Strategy is a multi-part project designed to monitor liquidity pool (
    ```bash
    cd python
 
+   2. ** fetch tvl and volume data from gecko terminal API **
+      ```bash
+        python -m LP_metrics_fetching.tvl_fetcher 
+
    2a. **run hedge-monitoring for fetching active hedge positions on Bitget:**
         ```bash
+        python -m hedge_monitoring.sync_bitget_hedgeable_tokens 
+
         python -m hedge_monitoring.bitget_position_fetcher
 
    2b. **run hedge-rebalancer to compute which positions needs rebalancing**
@@ -83,29 +89,68 @@ LP Hedging Strategy is a multi-part project designed to monitor liquidity pool (
 1. **Configure Environment:**
    Update the configuration in config.ts or set the environment variables (wallet addresses, API keys, output folders paths etc.).
 
-   ENV vars for lp-monitor: 
-    RPC_ENDPOINT=https://rpc-proxy.segfaultx0.workers.dev
-    SOLANA_WALLET_ADDRESSES=wallet1,wallet2,...
-    EVM_WALLET_ADDRESSES=wallet1,wallet2,...
-    KRYSTAL_CHAIN_IDS=1,137,56,...
-
    ENV vars for lp-monitor:
     BITGET_HEDGE1_API_KEY=...
     BITGET_HEDGE1_API_SECRET=...
     BITGET_API_PASSWORD=...
 
    other ENV vars:
+    TELEGRAM_TOKEN
     EXECUTION_IP=54.249.138.8
+
+    ROOT_DIR=absolute_path\LP-hedging-strategy
     LP_HEDGE_LOG_DIR=absolute_path\LP-hedging-strategy\logs
     LP_HEDGE_DATA_DIR=absolute_path\LP-hedging-strategy\lp-data
+    PYTHON_YAML_CONFIG_PATH=absolute_path\LP-hedging-strategy\python\config.yaml
 
-2. **Configure hedgeable tokens**
-    To track new hedge tokens on bitget, a mapping between the bitget ticker and the various onchain addresses of the token is needed.
-    Add desired tokens to the HEDGEABLE_TOKENS dictionary in ./python/common/constants.py  with the following structure:
+2. **Configure yaml files**
 
-    "BITGET_TICKER" : {
-        "chain_1" : ["address1_chain1", "address2_chain1"],
-        "chain_2" : ["address2_chain1", "address2_chain2"],
-    }
+   # lp-monitor configuration: /lp-monitor/lpMonitorConfig.yaml
+
+      # insert krystal chain id for what blockchains to monitor
+      krystal_chain_ids:
+         - "1" # Ethereum
+         - "137" # Polygon
+         - "56" # BSC
+         - "42161" # Arbitrum
+         - "146" # Sonic
+         - "8453" # Base
+
+      # insert desired solana rpc to connect to
+      rpc_endpoint: "https://rpc-proxy.segfaultx0.workers.dev"
+
+      # insert desired solana and evm wallets to monitor
+      solana_wallet_addresses:
+         - "sol_addr_1"
+         - "sol_addr_2"
+
+      evm_wallet_addresses:
+         - "evm_addr_1"
+         - "evm_addr_2"
+
+      
+      # insert desired krystal vaults to monitor, with respective krystal chain id and vault share
+      krystal_vault_wallet_chain_ids:
+      - wallet: "vault_addr_1"
+         chains: ["137"]
+         vault_share: 0.915
+      - wallet: "vault_addr_2"
+         chains: ["8453"]
+         vault_share: 1
+
+   # python code configuration /python/pythonConfig.yaml
+
+      # Automatic Hedge triggers configuration
+      hedge_rebalancer:
+
+         # Triggers for initiating rebalancing actions
+         triggers:
+            # Positive trigger: underhedged pctg
+            positive: 0.02
+            # Negative trigger: overhedged pctg
+            negative: -0.02
+            # minimum value to trigger a rebalance
+            min_usd: 200
+
 
 
