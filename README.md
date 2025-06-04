@@ -59,7 +59,7 @@ LP Hedging Strategy is a multi-part project designed to monitor liquidity pool (
 
    2. ** fetch tvl and volume data from gecko terminal API **
       ```bash
-        python -m LP_metrics_fetching.tvl_fetcher 
+        python3 -m LP_metrics_fetching.tvl_fetcher 
 
    2a. **run hedge-monitoring for fetching active hedge positions on Bitget:**
         ```bash
