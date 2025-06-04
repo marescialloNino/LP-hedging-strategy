@@ -161,14 +161,14 @@ def render_wallet_positions(dataframes, error_flags):
                 row["Protocol"],
                 pair_ticker,
                 "Yes" if row["Is In Range"] else "No",
-                f"{row['Fee APR']:.2%}" if pd.notna(row["Fee APR"]) else "N/A",
-                f"{row['Initial Value USD']:.2f}" if pd.notna(row["Initial Value USD"]) else "N/A",
+                f"{row['Fee APR']:.0%}" if pd.notna(row["Fee APR"]) else "N/A",
+                f"{row['Initial Value USD']:.0f}" if pd.notna(row["Initial Value USD"]) else "N/A",
                 f"{actual_value_usd:.0f}" if pd.notna(actual_value_usd) else "N/A",
                 f"{price_position:.0f}%" if pd.notna(price_position) else "N/A",
                 f"{width:.0f}%" if pd.notna(width) else "N/A",
                 f"{tvl:.0f}" if pd.notna(tvl) else "N/A",
                 f"{my_tvl_ratio:.3f}%" if pd.notna(my_tvl_ratio) else "N/A",
-                f"{volume_tvl_ratio:.2f}%" if pd.notna(volume_tvl_ratio) else "N/A",
+                f"{volume_tvl_ratio:.1f}%" if pd.notna(volume_tvl_ratio) else "N/A",
                 row["Pool Address"]
             ])
 
@@ -225,7 +225,7 @@ def render_wallet_positions(dataframes, error_flags):
                 f"{width:.0f}%" if pd.notna(width) else "N/A",
                 f"{tvl:.0f}" if pd.notna(tvl) else "N/A",
                 f"{my_tvl_ratio:.3f}%" if pd.notna(my_tvl_ratio) else "N/A",
-                f"{volume_tvl_ratio:.2f}%" if pd.notna(volume_tvl_ratio) else "N/A",
+                f"{volume_tvl_ratio:.1f}%" if pd.notna(volume_tvl_ratio) else "N/A",
                 row["Pool Address"]
             ])
 

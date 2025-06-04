@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 order_manager = OrderManager()
 hedge_actions = HedgeActions(order_manager.get_order_sender())
 
-@config(theme="dark")
+@config(theme="minty")
 async def main():
     # Scope the entire dashboard
     with use_scope('dashboard', clear=True):
