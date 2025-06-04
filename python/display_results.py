@@ -49,9 +49,7 @@ async def main():
     # Scope the entire dashboard
     with use_scope('dashboard', clear=True):
         put_markdown("# 🔮 🧙‍♂️ 🧪 💸 CM's Hedging Dashboard 💸 🧪 🧙‍♂️ 🔮")
-
         put_text("\nMy wife's boyfriend says Bitcoin has no intrinsic value.")
-
 
         HEDGABLE_TOKENS = load_hedgeable_tokens()
         # Load data
@@ -143,10 +141,18 @@ async def main():
         
         async def handle_config_change():
             if options:
+                # Log options and auto_hedge_tokens for debugging
+                logger.debug(f"Rendering form with options: {options}")
+                logger.debug(f"Current auto_hedge_tokens: {auto_hedge_tokens}")
+                
+                # Get pre-selected tokens
+                pre_selected = [token for token in hedgable_tokens if auto_hedge_tokens.get(token, False)]
+                
                 form_data = await input_group("Auto-hedge Tokens", [
                     checkbox(
                         name="auto_hedge_tokens",
                         options=options,
+                        value=pre_selected,  
                         inline=True,
                         help_text="Select tokens to auto-hedge"
                     ),
@@ -157,10 +163,14 @@ async def main():
                 ])
                 
                 if form_data['submit'] == 'save':
-                    save_auto_hedge_tokens({
-                        token: token in form_data['auto_hedge_tokens'] for token in hedgable_tokens
-                    })
-                    toast("Configuration saved successfully!", duration=3, color="success")
+                    new_auto_hedge_tokens = {token: token in form_data['auto_hedge_tokens'] for token in hedgable_tokens}
+                    logger.debug(f"Saving new auto_hedge_tokens: {new_auto_hedge_tokens}")
+                    try:
+                        save_auto_hedge_tokens(new_auto_hedge_tokens)
+                        toast("Configuration saved successfully!", duration=3, color="success")
+                    except Exception as e:
+                        logger.error(f"Error saving auto_hedge_tokens: {str(e)}")
+                        toast(f"Error saving configuration: {str(e)}", duration=5, color="error")
             else:
                 toast("No hedgeable tokens available.", duration=3, color="warning")
         
@@ -173,9 +183,7 @@ async def main():
             put_text("No hedgeable tokens available.")
 
         await render_custom_hedge_section(hedge_actions)
-
         await render_add_token_mapping_section()
-
 
 def cleanup():
     asyncio.run(order_manager.close())
