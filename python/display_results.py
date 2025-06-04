@@ -183,4 +183,4 @@ def cleanup():
 atexit.register(cleanup)
 
 if __name__ == "__main__":
-    start_server(main, port=8073, host="0.0.0.0", debug=True)
+    start_server(main, port=8080, host="0.0.0.0", debug=True)
