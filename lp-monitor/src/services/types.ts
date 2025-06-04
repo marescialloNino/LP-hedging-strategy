@@ -12,6 +12,7 @@ export interface LiquidityProfileEntry {
 export interface PositionInfo {
   id: string;
   owner: string;
+  chain: string;
   pool: string;
   tokenX: string;
   tokenY: string;
@@ -61,7 +62,6 @@ export interface KrystalPositionInfo {
   totalFeeEarnedUsd: number; // From statsByChain if available
   tokenXPriceUsd: number; // Token X price in USD
   tokenYPriceUsd: number; // Token Y price in USD
-  tvl: number; // Total value locked in the pool
 }
 
 

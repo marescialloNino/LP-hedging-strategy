@@ -70,6 +70,7 @@ async function saveMeteoraPositionsToCsv(positions: PositionInfo[]): Promise<voi
     header: [
       { id: 'timestamp', title: 'Timestamp' },
       { id: 'owner', title: 'Wallet Address' },
+      { id: 'chain', title: 'Chain' },
       { id: 'id', title: 'Position Key' },
       { id: 'pool', title: 'Pool Address' },
       { id: 'tokenXSymbol', title: 'Token X Symbol' },
@@ -266,6 +267,7 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
           const position: PositionInfo = {
             id: positionPubKey,
             owner: walletAddress,
+            chain: 'solana',
             pool: positionKey,
             tokenX: tokenXAddress,
             tokenY: tokenYAddress,

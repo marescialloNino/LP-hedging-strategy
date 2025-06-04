@@ -34,7 +34,7 @@ interface KrystalApiPosition {
   impermanentLoss: number;
   feeApr: number;
   status: string;
-  pool: { poolAddress: string; price: number; tvl: number; project: string };
+  pool: { poolAddress: string; price: number; project: string };
 }
 
 interface KrystalApiResponse {
@@ -75,7 +75,6 @@ export async function fetchKrystalPositions(walletAddress: string, chainIds: str
       const providedY = pos.providedAmounts[1] || { token: { address: '', symbol: 'Unknown', decimals: 0 }, balance: '0' };
       const feeX = pos.feePending.find((f: { token: { address: string }; balance: string }) => f.token.address === tokenX.token.address) || { balance: '0' };
       const feeY = pos.feePending.find((f: { token: { address: string }; balance: string }) => f.token.address === tokenY.token.address) || { balance: '0' };
-      const tvl = pos.pool.tvl || 0;
 
       // Get token prices from quotes if available, otherwise use token.price
       const tokenXPrice = tokenX.quotes?.usd?.price || tokenX.token.price || 0;
@@ -110,7 +109,6 @@ export async function fetchKrystalPositions(walletAddress: string, chainIds: str
         totalFeeEarnedUsd,
         tokenXPriceUsd: tokenXPrice,
         tokenYPriceUsd: tokenYPrice,
-        tvl: tvl,
       };
     });
 
@@ -156,7 +154,6 @@ export async function fetchKrystalVaultPositions(walletAddress: string, vaultSha
       const providedY = pos.providedAmounts[1] || { token: { address: '', symbol: 'Unknown', decimals: 0 }, balance: '0' };
       const feeX = pos.feePending.find((f: { token: { address: string }; balance: string }) => f.token.address === tokenX.token.address) || { balance: '0' };
       const feeY = pos.feePending.find((f: { token: { address: string }; balance: string }) => f.token.address === tokenY.token.address) || { balance: '0' };
-      const tvl = pos.pool.tvl || 0;
 
       // Get token prices from quotes if available, otherwise use token.price
       const tokenXPrice = tokenX.quotes?.usd?.price || tokenX.token.price || 0;
@@ -191,7 +188,6 @@ export async function fetchKrystalVaultPositions(walletAddress: string, vaultSha
         totalFeeEarnedUsd,
         tokenXPriceUsd: tokenXPrice,
         tokenYPriceUsd: tokenYPrice,
-        tvl: tvl,
       };
     });
 

@@ -23,6 +23,8 @@ KRYSTAL_HISTORY_CSV = DATA_DIR /"LP_krystal_positions_history.csv"
 HEDGING_HISTORY_CSV = DATA_DIR / "hedging_positions_history.csv"
 REBALANCING_HISTORY_DIR = DATA_DIR / "rebalancing_history"
 
+ACTIVE_POOLS_TVL = DATA_DIR / "active_pools.csv"
+
 # ==================== error flags files ====================
 HEDGE_ERROR_FLAGS_PATH = LOG_DIR / 'hedge_fetching_errors.json'
 LP_ERROR_FLAGS_PATH = LOG_DIR / 'lp_fetching_errors.json'

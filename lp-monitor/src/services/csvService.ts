@@ -79,6 +79,7 @@ export async function generateMeteoraCSV(walletAddress: string, positions: Posit
     const record = {
       timestamp: new Date().toISOString(),
       walletAddress,
+      chain: 'solana',
       positionKey: pos.id,
       poolAddress: pos.pool,
       tokenXSymbol: pos.tokenXSymbol || 'Unknown',
@@ -145,7 +146,6 @@ export async function generateKrystalCSV(walletAddress: string, positions: Kryst
     const tokenYPriceUsd = pos.tokenYPriceUsd || 0;
     const tokenXUsdAmount = tokenXQty * tokenXPriceUsd;
     const tokenYUsdAmount = tokenYQty * tokenYPriceUsd;
-    const tvl = pos.tvl;
 
     const record = {
       timestamp: new Date().toISOString(),
@@ -173,7 +173,6 @@ export async function generateKrystalCSV(walletAddress: string, positions: Kryst
       feeApr: pos.feeApr,
       tokenXUsdAmount,
       tokenYUsdAmount,
-      tvl
     };
 
     return record;
@@ -193,6 +192,7 @@ function calculateQuantity(amount: string, decimals: number): number {
 export const METEORA_LATEST_HEADERS = [
   { id: 'timestamp', title: 'Timestamp' },
   { id: 'walletAddress', title: 'Wallet Address' },
+  { id: 'chain', title: 'Chain' },
   { id: 'positionKey', title: 'Position Key' },
   { id: 'poolAddress', title: 'Pool Address' },
   { id: 'tokenXSymbol', title: 'Token X Symbol' },
@@ -238,7 +238,6 @@ export const KRYSTAL_LATEST_HEADERS = [
   { id: 'feeApr', title: 'Fee APR' },
   { id: 'tokenXUsdAmount', title: 'Token X USD Amount' },
   { id: 'tokenYUsdAmount', title: 'Token Y USD Amount' },
-  { id: 'tvl', title: 'tvl' },
 ];
 
 export async function writeMeteoraLatestCSV(records: any[]): Promise<void> {

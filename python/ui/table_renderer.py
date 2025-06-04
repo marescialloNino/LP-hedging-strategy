@@ -5,7 +5,7 @@ from pathlib import Path
 from pywebio.output import put_table, put_text, put_row, put_markdown, put_html, toast, put_buttons
 from common.utils import calculate_token_usd_value
 from common.data_loader import load_hedgeable_tokens, load_ticker_mappings
-from common.path_config import CONFIG_DIR
+from common.path_config import CONFIG_DIR, ACTIVE_POOLS_TVL
 
 AUTO_HEDGE_TOKENS_PATH = CONFIG_DIR / "auto_hedge_tokens.json"
 HEDGABLE_TOKENS = load_hedgeable_tokens()
@@ -64,17 +64,57 @@ def save_auto_hedge_tokens(tokens):
         print(f"Error saving auto_hedge_tokens.json: {str(e)}")
 
 
+# Chain name mapping to GeckoTerminal's conventions
+CHAIN_MAPPING = {
+    "solana": "solana",
+    "ethereum": "eth",
+    "bsc": "bsc",
+    "polygon": "polygon_pos",
+    "arbitrum": "arbitrum",
+    "sui": "sui-network",
+    "base": "base"
+}
+
 def render_wallet_positions(dataframes, error_flags):
     """
-    Render wallet positions table for Krystal and Meteora.
+    Render wallet positions table for Krystal and Meteora with TVL and 24h Volume/TVL columns.
+    Includes debugging logs to diagnose matching issues.
     """
     krystal_error = error_flags.get('krystal_error', False)
     meteora_error = error_flags.get('meteora_error', False)
     wallet_headers = [
         "Source", "Wallet", "Chain", "Protocol", "Pair", "In Range", "Fee APR", "Initial USD", "Present USD",
-        "Price Position %", "Width %", "TVL (USD)", "My TVL/TVL %", "Pool Address"
+        "Price Position %", "Width %", "TVL (USD)", "My TVL/TVL %", "24h Volume/TVL", "Pool Address"
     ]
     wallet_data = []
+
+    # Load active_pools.csv for TVL and volume data
+    pool_metrics_df = None
+    try:
+        pool_metrics_df = dataframes["Active Pools TVL"]
+        print(f"Loaded pool_metrics_df from dataframes['Active Pools TVL'] with {len(pool_metrics_df)} rows")
+        print(f"Columns in pool_metrics_df: {pool_metrics_df.columns.tolist()}")
+        print(f"Sample pool_metrics_df:\n{pool_metrics_df.head().to_string()}")
+        pool_metrics_df['chain'] = pool_metrics_df['chain'].str.lower()
+        pool_metrics_df['pool_address'] = pool_metrics_df['pool_address'].str.lower()
+    except KeyError:
+        print("Key 'Active Pools TVL' not found in dataframes. Falling back to loading from ACTIVE_POOLS_TVL")
+        try:
+            pool_metrics_df = pd.read_csv(ACTIVE_POOLS_TVL)
+            print(f"Loaded pool_metrics_df from {ACTIVE_POOLS_TVL} with {len(pool_metrics_df)} rows")
+            print(f"Columns in pool_metrics_df: {pool_metrics_df.columns.tolist()}")
+            print(f"Sample pool_metrics_df:\n{pool_metrics_df.head().to_string()}")
+            pool_metrics_df['chain'] = pool_metrics_df['chain'].str.lower()
+            pool_metrics_df['pool_address'] = pool_metrics_df['pool_address'].str.lower()
+        except Exception as e:
+            print(f"Error loading active_pools.csv from {ACTIVE_POOLS_TVL}: {e}")
+            pool_metrics_df = pd.DataFrame(columns=['chain', 'pool_address', 'tvl_usd', 'volume_24h_usd'])
+
+    # Log unique chains in pool_metrics_df
+    if not pool_metrics_df.empty:
+        print(f"Unique chains in pool_metrics_df: {pool_metrics_df['chain'].unique().tolist()}")
+    else:
+        print("pool_metrics_df is empty")
 
     if "Krystal" in dataframes and not krystal_error:
         krystal_df = dataframes["Krystal"]
@@ -88,9 +128,32 @@ def render_wallet_positions(dataframes, error_flags):
             max_price = float(row["Max Price"]) if pd.notna(row["Max Price"]) else np.nan
             price_position = ((current_price - min_price) / (max_price - min_price) * 100) if pd.notna(current_price) and pd.notna(min_price) and pd.notna(max_price) and max_price != min_price else np.nan
             width = ((max_price / min_price - 1) * 100) if pd.notna(max_price) and pd.notna(min_price) and min_price != 0 else np.nan
-            tvl = float(row["tvl"]) if pd.notna(row["tvl"]) else np.nan
+
+            # Get TVL and volume from active_pools.csv
+            pool_address = row["Pool Address"].lower() if isinstance(row["Pool Address"], str) else ""
+            chain = CHAIN_MAPPING.get(row["Chain"].lower(), row["Chain"].lower()) if isinstance(row["Chain"], str) else ""
+            print(f"Krystal: Matching pool_address={pool_address}, chain={chain}")
+            pool_match = pool_metrics_df[(pool_metrics_df['pool_address'] == pool_address) & (pool_metrics_df['chain'] == chain)]
+            if pool_match.empty:
+                print(f"Krystal: No match found for pool_address={pool_address}, chain={chain}")
+                tvl = np.nan
+                volume_24h = np.nan
+            else:
+                try:
+                    tvl = float(pool_match['tvl_usd'].iloc[0])
+                    volume_24h = float(pool_match['volume_24h_usd'].iloc[0])
+                    print(f"Krystal: Match found for pool_address={pool_address}, chain={chain}, tvl={tvl}, volume_24h={volume_24h}")
+                except (ValueError, TypeError) as e:
+                    print(f"Krystal: Error converting tvl_usd or volume_24h_usd for pool_address={pool_address}, chain={chain}: {e}")
+                    tvl = np.nan
+                    volume_24h = np.nan
+
+            volume_tvl_ratio = (volume_24h / tvl * 100) if pd.notna(tvl) and pd.notna(volume_24h) and tvl != 0 else np.nan
+
+            # Calculate My TVL/TVL %
             actual_value_usd = float(row["Actual Value USD"]) if pd.notna(row["Actual Value USD"]) else np.nan
             my_tvl_ratio = (actual_value_usd / tvl * 100) if pd.notna(actual_value_usd) and pd.notna(tvl) and tvl != 0 else np.nan
+
             wallet_data.append([
                 "Krystal",
                 truncate_wallet(row["Wallet Address"]),
@@ -100,11 +163,12 @@ def render_wallet_positions(dataframes, error_flags):
                 "Yes" if row["Is In Range"] else "No",
                 f"{row['Fee APR']:.2%}" if pd.notna(row["Fee APR"]) else "N/A",
                 f"{row['Initial Value USD']:.2f}" if pd.notna(row["Initial Value USD"]) else "N/A",
-                f"{actual_value_usd:.2f}" if pd.notna(actual_value_usd) else "N/A",
-                f"{price_position:.2f}%" if pd.notna(price_position) else "N/A",
-                f"{width:.2f}%" if pd.notna(width) else "N/A",
-                f"{tvl:.2f}" if pd.notna(tvl) else "N/A",
-                f"{my_tvl_ratio:.2f}%" if pd.notna(my_tvl_ratio) else "N/A",
+                f"{actual_value_usd:.0f}" if pd.notna(actual_value_usd) else "N/A",
+                f"{price_position:.0f}%" if pd.notna(price_position) else "N/A",
+                f"{width:.0f}%" if pd.notna(width) else "N/A",
+                f"{tvl:.0f}" if pd.notna(tvl) else "N/A",
+                f"{my_tvl_ratio:.3f}%" if pd.notna(my_tvl_ratio) else "N/A",
+                f"{volume_tvl_ratio:.2f}%" if pd.notna(volume_tvl_ratio) else "N/A",
                 row["Pool Address"]
             ])
 
@@ -117,13 +181,36 @@ def render_wallet_positions(dataframes, error_flags):
             price_x = float(row["Token X Price USD"]) if pd.notna(row["Token X Price USD"]) else 0
             price_y = float(row["Token Y Price USD"]) if pd.notna(row["Token Y Price USD"]) else 0
             present_usd = (qty_x * price_x) + (qty_y * price_y)
-            # Meteora uses Lower/Upper Boundary instead of Min/Max Price
             current_price = float(price_x/price_y) if pd.notna(price_x) and pd.notna(price_y) and price_y != 0 else np.nan
             min_price = float(row["Lower Boundary"]) if pd.notna(row["Lower Boundary"]) else np.nan
             max_price = float(row["Upper Boundary"]) if pd.notna(row["Upper Boundary"]) else np.nan
-            # For Meteora, Current Price is not available, so set Price Position % to N/A
-            price_position = ((current_price - min_price) / (max_price - min_price) * 100) if pd.notna(current_price) and pd.notna(min_price) and pd.notna(max_price) and max_price != min_price else np.nan  
+            price_position = ((current_price - min_price) / (max_price - min_price) * 100) if pd.notna(current_price) and pd.notna(min_price) and pd.notna(max_price) and max_price != min_price else np.nan
             width = ((max_price / min_price - 1) * 100) if pd.notna(max_price) and pd.notna(min_price) and min_price != 0 else np.nan
+
+            # Get TVL and volume from active_pools.csv
+            pool_address = row["Pool Address"].lower() if isinstance(row["Pool Address"], str) else ""
+            chain = CHAIN_MAPPING.get("solana", "solana")  # Meteora is always on Solana
+            print(f"Meteora: Matching pool_address={pool_address}, chain={chain}")
+            pool_match = pool_metrics_df[(pool_metrics_df['pool_address'] == pool_address) & (pool_metrics_df['chain'] == chain)]
+            if pool_match.empty:
+                print(f"Meteora: No match found for pool_address={pool_address}, chain={chain}")
+                tvl = np.nan
+                volume_24h = np.nan
+            else:
+                try:
+                    tvl = float(pool_match['tvl_usd'].iloc[0])
+                    volume_24h = float(pool_match['volume_24h_usd'].iloc[0])
+                    print(f"Meteora: Match found for pool_address={pool_address}, chain={chain}, tvl={tvl}, volume_24h={volume_24h}")
+                except (ValueError, TypeError) as e:
+                    print(f"Meteora: Error converting tvl_usd or volume_24h_usd for pool_address={pool_address}, chain={chain}: {e}")
+                    tvl = np.nan
+                    volume_24h = np.nan
+
+            volume_tvl_ratio = (volume_24h / tvl * 100) if pd.notna(tvl) and pd.notna(volume_24h) and tvl != 0 else np.nan
+
+            # Calculate My TVL/TVL %
+            my_tvl_ratio = (present_usd / tvl * 100) if pd.notna(present_usd) and pd.notna(tvl) and tvl != 0 else np.nan
+
             wallet_data.append([
                 "Meteora",
                 truncate_wallet(row["Wallet Address"]),
@@ -133,11 +220,12 @@ def render_wallet_positions(dataframes, error_flags):
                 "Yes" if row["Is In Range"] else "No",
                 "N/A",
                 "N/A",
-                f"{present_usd:.2f}",
-                f"{price_position:.2f}%",  # Price Position % not available for Meteora
-                f"{width:.2f}%" if pd.notna(width) else "N/A",
-                "N/A",
-                "N/A",
+                f"{present_usd:.0f}",
+                f"{price_position:.0f}%" if pd.notna(price_position) else "N/A",
+                f"{width:.0f}%" if pd.notna(width) else "N/A",
+                f"{tvl:.0f}" if pd.notna(tvl) else "N/A",
+                f"{my_tvl_ratio:.3f}%" if pd.notna(my_tvl_ratio) else "N/A",
+                f"{volume_tvl_ratio:.2f}%" if pd.notna(volume_tvl_ratio) else "N/A",
                 row["Pool Address"]
             ])
 
@@ -337,8 +425,8 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     f"{lp_amount_usd:.2f}" if pd.notna(lp_amount_usd) else "N/A",
                     f"{hedge_amount:.4f}" if pd.notna(hedge_amount) else "N/A",
                     f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
-                    f"{hedge_qty_ratio:.2f}%" if pd.notna(hedge_qty_ratio) else "N/A",
-                    f"{suggested_hedge_ratio:.2f}%" if pd.notna(suggested_hedge_ratio) else "N/A",
+                    f"{hedge_qty_ratio:.0f}%" if pd.notna(hedge_qty_ratio) else "N/A",
+                    f"{suggested_hedge_ratio:.0f}%" if pd.notna(suggested_hedge_ratio) else "N/A",
                     button,
                     f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
                 ])
@@ -401,8 +489,8 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     f"{lp_amount_usd:.2f}" if pd.notna(lp_amount_usd) else "N/A",
                     f"{hedge_amount:.4f}" if pd.notna(hedge_amount) else "N/A",
                     f"{lp_qty:.6f}" if pd.notna(lp_qty) else "N/A",
-                    f"{hedge_qty_ratio:.2f}%" if pd.notna(hedge_qty_ratio) else "N/A",
-                    f"{suggested_hedge_ratio:.2f}%" if pd.notna(suggested_hedge_ratio) else "N/A",
+                    f"{hedge_qty_ratio:.0f}%" if pd.notna(hedge_qty_ratio) else "N/A",
+                    f"{suggested_hedge_ratio:.0f}%" if pd.notna(suggested_hedge_ratio) else "N/A",
                     button,
                     f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
                 ])
