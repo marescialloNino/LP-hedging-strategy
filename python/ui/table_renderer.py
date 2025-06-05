@@ -148,7 +148,7 @@ def render_wallet_positions(dataframes, error_flags):
                     tvl = np.nan
                     volume_24h = np.nan
 
-            volume_tvl_ratio = (volume_24h / tvl * 100) if pd.notna(tvl) and pd.notna(volume_24h) and tvl != 0 else np.nan
+            volume_tvl_ratio = (volume_24h / tvl) if pd.notna(tvl) and pd.notna(volume_24h) and tvl != 0 else np.nan
 
             # Calculate My TVL/TVL %
             actual_value_usd = float(row["Actual Value USD"]) if pd.notna(row["Actual Value USD"]) else np.nan
@@ -168,7 +168,7 @@ def render_wallet_positions(dataframes, error_flags):
                 f"{width:.0f}%" if pd.notna(width) else "N/A",
                 f"{tvl:.0f}" if pd.notna(tvl) else "N/A",
                 f"{my_tvl_ratio:.3f}%" if pd.notna(my_tvl_ratio) else "N/A",
-                f"{volume_tvl_ratio:.1f}%" if pd.notna(volume_tvl_ratio) else "N/A",
+                f"{volume_tvl_ratio:.1f}" if pd.notna(volume_tvl_ratio) else "N/A",
                 row["Pool Address"]
             ])
 
@@ -206,7 +206,7 @@ def render_wallet_positions(dataframes, error_flags):
                     tvl = np.nan
                     volume_24h = np.nan
 
-            volume_tvl_ratio = (volume_24h / tvl * 100) if pd.notna(tvl) and pd.notna(volume_24h) and tvl != 0 else np.nan
+            volume_tvl_ratio = (volume_24h / tvl) if pd.notna(tvl) and pd.notna(volume_24h) and tvl != 0 else np.nan
 
             # Calculate My TVL/TVL %
             my_tvl_ratio = (present_usd / tvl * 100) if pd.notna(present_usd) and pd.notna(tvl) and tvl != 0 else np.nan
@@ -225,7 +225,7 @@ def render_wallet_positions(dataframes, error_flags):
                 f"{width:.0f}%" if pd.notna(width) else "N/A",
                 f"{tvl:.0f}" if pd.notna(tvl) else "N/A",
                 f"{my_tvl_ratio:.3f}%" if pd.notna(my_tvl_ratio) else "N/A",
-                f"{volume_tvl_ratio:.1f}%" if pd.notna(volume_tvl_ratio) else "N/A",
+                f"{volume_tvl_ratio:.1f}" if pd.notna(volume_tvl_ratio) else "N/A",
                 row["Pool Address"]
             ])
 
@@ -255,12 +255,12 @@ def render_pnl_tables(dataframes, error_flags):
                 "solana",
                 truncate_wallet(row["Owner"]),
                 pair,
-                f"{row['Realized PNL (USD)']:.2f}",
-                f"{row['Unrealized PNL (USD)']:.2f}",
-                f"{row['Net PNL (USD)']:.2f}",
-                f"{row['Realized PNL (Token B)']:.2f}",
-                f"{row['Unrealized PNL (Token B)']:.2f}",
-                f"{row['Net PNL (Token B)']:.2f}",
+                f"{row['Realized PNL (USD)']:.0f}",
+                f"{row['Unrealized PNL (USD)']:.0f}",
+                f"{row['Net PNL (USD)']:.0f}",
+                f"{row['Realized PNL (Token B)']:.0f}",
+                f"{row['Unrealized PNL (Token B)']:.0f}",
+                f"{row['Net PNL (Token B)']:.0f}",
                 row["Position ID"],
                 row["Pool Address"]
             ])
@@ -287,10 +287,10 @@ def render_pnl_tables(dataframes, error_flags):
                 truncate_wallet(r["userAddress"]),
                 pair,
                 r["earliest_createdTime"],
-                f"{r['lp_pnl_usd']:.2f}" if pd.notna(r['lp_pnl_usd']) else "N/A",
+                f"{r['lp_pnl_usd']:.0f}" if pd.notna(r['lp_pnl_usd']) else "N/A",
                 f"{r['lp_pnl_tokenB']:.5f}" if pd.notna(r['lp_pnl_tokenB']) else "N/A",
-                f"{r['hold_pnl_usd']:.2f}" if pd.notna(r['hold_pnl_usd']) else "N/A",
-                f"{r['lp_minus_hold_usd']:.2f}" if pd.notna(r['lp_minus_hold_usd']) else "N/A",
+                f"{r['hold_pnl_usd']:.0f}" if pd.notna(r['hold_pnl_usd']) else "N/A",
+                f"{r['lp_minus_hold_usd']:.0f}" if pd.notna(r['lp_minus_hold_usd']) else "N/A",
                 r["poolAddress"]
             ])
         put_table(pnl_rows, header=pnl_headers)
@@ -422,10 +422,10 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 token_data.append([
                     token,
                     lp_amount_usd,  # Store raw value for sorting
-                    f"{lp_amount_usd:.2f}" if pd.notna(lp_amount_usd) else "N/A",
-                    f"{hedge_amount:.4f}" if pd.notna(hedge_amount) else "N/A",
+                    f"{lp_amount_usd:.0f}" if pd.notna(lp_amount_usd) else "N/A",
+                    f"{hedge_amount:.0f}" if pd.notna(hedge_amount) else "N/A",
                     f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
-                    f"{hedge_qty_ratio:.0f}%" if pd.notna(hedge_qty_ratio) else "N/A",
+                    f"{abs(hedge_qty_ratio):.0f}%" if pd.notna(hedge_qty_ratio) else "N/A",
                     f"{suggested_hedge_ratio:.0f}%" if pd.notna(suggested_hedge_ratio) else "N/A",
                     button,
                     f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
@@ -486,10 +486,10 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 token_data.append([
                     token,
                     lp_amount_usd,  # Store raw value for sorting
-                    f"{lp_amount_usd:.2f}" if pd.notna(lp_amount_usd) else "N/A",
-                    f"{hedge_amount:.4f}" if pd.notna(hedge_amount) else "N/A",
+                    f"{lp_amount_usd:.0f}" if pd.notna(lp_amount_usd) else "N/A",
+                    f"{hedge_amount:.0f}" if pd.notna(hedge_amount) else "N/A",
                     f"{lp_qty:.6f}" if pd.notna(lp_qty) else "N/A",
-                    f"{hedge_qty_ratio:.0f}%" if pd.notna(hedge_qty_ratio) else "N/A",
+                    f"{abs(hedge_qty_ratio):.0f}%" if pd.notna(hedge_qty_ratio) else "N/A",
                     f"{suggested_hedge_ratio:.0f}%" if pd.notna(suggested_hedge_ratio) else "N/A",
                     button,
                     f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
