@@ -10,6 +10,7 @@ LOG_DIR = Path(os.getenv('LP_HEDGE_LOG_DIR', ROOT_DIR / 'logs')).resolve()
 DATA_DIR = Path(os.getenv('LP_HEDGE_DATA_DIR', ROOT_DIR / 'lp-data')).resolve()
 
 PYTHON_YAML_CONFIG_PATH = Path(os.getenv('PYTHON_YAML_CONFIG_PATH', ROOT_DIR / 'python/pythonConfig.yaml')).resolve()
+LPMONITOR_YAML_CONFIG_PATH = Path(os.getenv('LPMONITOR_YAML_CONFIG_PATH', ROOT_DIR / 'lp-monitor/lpMonitorConfig.yaml')).resolve()
 
 # ==================== last calculated positions files ====================
 METEORA_LATEST_CSV = DATA_DIR / "LP_meteora_positions_latest.csv"

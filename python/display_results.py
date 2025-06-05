@@ -4,13 +4,14 @@ import sys
 import asyncio
 import logging
 import atexit
+import yaml
 from pathlib import Path
 from pywebio import start_server, config
 from pywebio.input import checkbox, input_group, actions, select, input
 from pywebio.output import use_scope, put_markdown, put_error, put_text, put_table, put_buttons, toast, put_html, clear
 from pywebio.session import run_async
 from common.data_loader import load_data, load_hedgeable_tokens
-from common.path_config import WORKFLOW_SHELL_SCRIPT, PNL_SHELL_SCRIPT, HEDGE_SHELL_SCRIPT, LOG_DIR
+from common.path_config import WORKFLOW_SHELL_SCRIPT, PNL_SHELL_SCRIPT, HEDGE_SHELL_SCRIPT, LOG_DIR, LPMONITOR_YAML_CONFIG_PATH
 from hedge_automation.order_manager import OrderManager
 from hedge_automation.hedge_actions import HedgeActions
 from common.utils import run_shell_script
@@ -47,6 +48,111 @@ hedge_actions = HedgeActions(order_manager.get_order_sender())
 def format_usd(value):
     """Format USD value with commas and 2 decimal places."""
     return f"${value:,.2f}" if pd.notna(value) else "N/A"
+
+
+async def handle_vault_share_change():
+    """Handle updating vault share in config.yaml via a form."""
+    yaml_file = LPMONITOR_YAML_CONFIG_PATH
+    logger.info("Change Vault Share button clicked")
+
+    # Chain ID to name mapping
+    chain_id_mapping = {
+        1: "ethereum",
+        56: "bsc",
+        137: "polygon",
+        146: "sonic",
+        42161: "arbitrum",
+        8453: "base",
+    }
+
+    try:
+        # Read YAML file
+        with yaml_file.open('r') as f:
+            config = yaml.safe_load(f)
+        if not config or 'krystal_vault_wallet_chain_ids' not in config:
+            raise ValueError("Invalid or missing krystal_vault_wallet_chain_ids in config.yaml")
+
+        # Prepare wallet options for dropdown
+        wallet_options = []
+        for entry in config['krystal_vault_wallet_chain_ids']:
+            # Convert chain IDs to names
+            chain_names = []
+            for chain_id in entry['chains']:
+                try:
+                    chain_id_int = int(chain_id)
+                    chain_name = chain_id_mapping.get(chain_id_int, chain_id)
+                except ValueError:
+                    chain_name = chain_id
+                chain_names.append(chain_name)
+            logger.debug(f"Wallet {entry['wallet']}: Raw chains {entry['chains']}, Mapped: {chain_names}")
+            wallet_options.append({
+                "label": f"{entry['wallet']} (Chains: {', '.join(chain_names)}, Current Share: {entry['vault_share']})",
+                "value": entry['wallet']
+            })
+
+        if not wallet_options:
+            toast("No vault wallets found in config.yaml.", duration=5, color="warning")
+            logger.warning("No vault wallets found in config.yaml")
+            return
+
+        # Validation function for vault share
+        def validate_vault_share(value):
+            try:
+                share = float(value)
+                if not 0 <= share <= 1:
+                    return "Must be between 0 and 1"
+                return None
+            except ValueError:
+                return "Must be a valid number (e.g., 0.915)"
+
+        # Render form
+        form_data = await input_group("Update Vault Share", [
+            select(
+                name="wallet",
+                options=wallet_options,
+                help_text="Select a vault wallet to update its share."
+            ),
+            input(
+                name="vault_share",
+                type="text",
+                value="0.9",
+                required=True,
+                help_text="Enter new vault share (0 to 1, e.g., 0.915)",
+                validate=validate_vault_share
+            ),
+            actions(
+                name="submit",
+                buttons=[{'label': 'Save Vault Share', 'value': 'save', 'color': 'success'}]
+            )
+        ])
+
+        if form_data['submit'] == 'save':
+            selected_wallet = form_data['wallet']
+            new_vault_share = float(form_data['vault_share'])
+            logger.debug(f"Input vault share: {form_data['vault_share']}, Parsed: {new_vault_share}")
+
+            # Update vault share in config
+            for entry in config['krystal_vault_wallet_chain_ids']:
+                if entry['wallet'] == selected_wallet:
+                    entry['vault_share'] = new_vault_share
+                    break
+
+            # Write back to YAML file
+            with yaml_file.open('w') as f:
+                yaml.safe_dump(config, f, default_flow_style=False, sort_keys=False)
+            
+            toast(f"Vault share for {selected_wallet[:8]}... updated to {new_vault_share}!", duration=3, color="success")
+            logger.info(f"Updated vault share for wallet {selected_wallet} to {new_vault_share}")
+
+    except FileNotFoundError:
+        toast("Config file not found.", duration=5, color="error")
+        logger.error(f"Config file not found: {yaml_file}")
+    except yaml.YAMLError as e:
+        toast(f"Invalid YAML format: {str(e)}", duration=5, color="error")
+        logger.error(f"YAML parsing error: {str(e)}")
+    except Exception as e:
+        toast(f"Error updating vault share: {str(e)}", duration=5, color="error")
+        logger.error(f"Error updating vault share: {str(e)}")
 
 async def render_lp_summary(dataframes, error_flags):
     """Render LP summary with total value, chain dropdown, protocol dropdown, and protocol/pool breakdowns."""
@@ -246,6 +352,14 @@ async def main():
             render_hedging_table(dataframes, data['errors'], hedge_actions)
         else:
             put_text("No rebalancing or hedging data available.")
+
+
+        put_markdown("## Vault Share Configuration")
+        put_text("You can change the vault share for your Krystal vault wallets. \nFetch updated data after saving new vault shares.")
+        put_buttons(
+            [{'label': 'Change Vault Share 💸', 'value': 'vault_share', 'color': 'primary'}],
+            onclick=lambda _: run_async(handle_vault_share_change())
+        )
 
         put_markdown("## Hedge Automation")
         put_text("Select only the tokens you want to put on auto-hedge mode, and save the configuration. \nRemember to refresh the page so it can reload the data and the changes take effect.")
