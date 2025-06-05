@@ -115,7 +115,6 @@ async def handle_vault_share_change():
             input(
                 name="vault_share",
                 type="text",
-                value="0.9",
                 required=True,
                 help_text="Enter new vault share (0 to 1, e.g., 0.915)",
                 validate=validate_vault_share
