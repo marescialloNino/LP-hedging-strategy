@@ -258,9 +258,9 @@ def render_pnl_tables(dataframes, error_flags):
                 f"{row['Realized PNL (USD)']:.0f}",
                 f"{row['Unrealized PNL (USD)']:.0f}",
                 f"{row['Net PNL (USD)']:.0f}",
-                f"{row['Realized PNL (Token B)']:.0f}",
-                f"{row['Unrealized PNL (Token B)']:.0f}",
-                f"{row['Net PNL (Token B)']:.0f}",
+                f"{row['Realized PNL (Token B)']:.3f}",
+                f"{row['Unrealized PNL (Token B)']:.3f}",
+                f"{row['Net PNL (Token B)']:.3f}",
                 row["Position ID"],
                 row["Pool Address"]
             ])

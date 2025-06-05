@@ -199,7 +199,7 @@ def build_symbol(coin, market, perp=False, factor=True, to_quote=False, universa
             sym_list = {
                 'binancefut': ['PEPE', 'SATS', 'LUNC', 'XEC', 'BONK', 'FLOKI', 'CAT', 'RATS', 'WHY', 'X'],
                 'bybit': ['PEPE', 'SATS', 'LUNC', 'XEC', 'BONK', 'FLOKI'],
-                'bitget': ['XEC', 'BONK', 'SATS', 'RATS', 'CAT']
+                'bitget': []
             }
 
             for name in sym_list.get(market, []):
