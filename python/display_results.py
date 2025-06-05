@@ -7,7 +7,7 @@ import atexit
 from pathlib import Path
 from pywebio import start_server, config
 from pywebio.input import checkbox, input_group, actions, select, input
-from pywebio.output import use_scope, put_markdown, put_error, put_text, put_table, put_buttons, toast, put_html
+from pywebio.output import use_scope, put_markdown, put_error, put_text, put_table, put_buttons, toast, put_html, clear
 from pywebio.session import run_async
 from common.data_loader import load_data, load_hedgeable_tokens
 from common.path_config import WORKFLOW_SHELL_SCRIPT, PNL_SHELL_SCRIPT, HEDGE_SHELL_SCRIPT, LOG_DIR
@@ -44,55 +44,169 @@ logger = logging.getLogger(__name__)
 order_manager = OrderManager()
 hedge_actions = HedgeActions(order_manager.get_order_sender())
 
+def format_usd(value):
+    """Format USD value with commas and 2 decimal places."""
+    return f"${value:,.2f}" if pd.notna(value) else "N/A"
+
+async def render_lp_summary(dataframes, error_flags):
+    """Render LP summary with total value, chain dropdown, protocol dropdown, and protocol/pool breakdowns."""
+    with use_scope('lp_summary_content', clear=True):
+        krystal_error = error_flags.get('krystal_error', False)
+        meteora_error = error_flags.get('meteora_error', False)
+
+        # Initialize data structures
+        lp_data = []
+
+        # Process Krystal data
+        if "Krystal" in dataframes and not krystal_error:
+            krystal_df = dataframes["Krystal"].copy()
+            for _, row in krystal_df.iterrows():
+                usd_value = float(row["Actual Value USD"]) if pd.notna(row["Actual Value USD"]) else 0
+                chain = row["Chain"].lower() if isinstance(row["Chain"], str) else "unknown"
+                protocol = row["Protocol"] if isinstance(row["Protocol"], str) else "Krystal"
+                pair = f"{row['Token X Symbol']}-{row['Token Y Symbol']}" if pd.notna(row["Token X Symbol"]) and pd.notna(row["Token Y Symbol"]) else "Unknown"
+                pool_address = row["Pool Address"] if isinstance(row["Pool Address"], str) else "unknown"
+                lp_data.append({
+                    "Chain": chain,
+                    "Protocol": protocol,
+                    "Pool Address": pool_address,
+                    "Pair": pair,
+                    "USD Value": usd_value
+                })
+
+        # Process Meteora data
+        if "Meteora" in dataframes and not meteora_error:
+            meteora_df = dataframes["Meteora"].copy()
+            for _, row in meteora_df.iterrows():
+                qty_x = float(row["Token X Qty"]) if pd.notna(row["Token X Qty"]) else 0
+                price_x = float(row["Token X Price USD"]) if pd.notna(row["Token X Price USD"]) else 0
+                qty_y = float(row["Token Y Qty"]) if pd.notna(row["Token Y Qty"]) else 0
+                price_y = float(row["Token Y Price USD"]) if pd.notna(row["Token Y Price USD"]) else 0
+                usd_value = (qty_x * price_x) + (qty_y * price_y)
+                chain = "solana"  # Meteora is Solana-only
+                protocol = "Meteora"
+                pair = f"{row['Token X Symbol']}-{row['Token Y Symbol']}" if pd.notna(row["Token X Symbol"]) and pd.notna(row["Token Y Symbol"]) else "Unknown"
+                pool_address = row["Pool Address"] if isinstance(row["Pool Address"], str) else "unknown"
+                lp_data.append({
+                    "Chain": chain,
+                    "Protocol": protocol,
+                    "Pool Address": pool_address,
+                    "Pair": pair,
+                    "USD Value": usd_value
+                })
+
+        if not lp_data:
+            put_text("No LP data available.")
+            logger.warning("No LP data available for summary")
+            return
+
+        # Create DataFrame
+        lp_df = pd.DataFrame(lp_data)
+        logger.debug(f"LP DataFrame: {lp_df.head().to_string()}")
+        total_lp_value = lp_df["USD Value"].sum()
+
+        # Get unique chains
+        chains = sorted([c for c in lp_df["Chain"].unique().tolist() if c != "unknown"])
+        chain_options = [{"label": "All Chains", "value": "all"}] + [{"label": chain.capitalize(), "value": chain} for chain in chains]
+
+        # Render total LP value
+        put_markdown(f"**Total LP Value Across All Chains:** {format_usd(total_lp_value)}")
+
+        # Render chain dropdown
+        selected_chain = await select(
+            "Select Chain",
+            options=chain_options,
+            value="all",
+            help_text="Choose a chain to view detailed LP breakdown."
+        )
+
+        # Clear details scope and render updated data
+        with use_scope('lp_details', clear=True):
+            if selected_chain == "all":
+                # Protocol breakdown for all chains
+                protocol_totals = lp_df.groupby("Protocol")["USD Value"].sum().reset_index()
+                protocol_table = [
+                    [row["Protocol"], format_usd(row["USD Value"])]
+                    for _, row in protocol_totals.iterrows()
+                ]
+                put_markdown("### LP Value by Protocol (All Chains)")
+                put_table(protocol_table, header=["Protocol", "USD Value"])
+
+                # Pool breakdown for all chains
+                pool_totals = lp_df.groupby(["Pool Address", "Pair"])["USD Value"].sum().reset_index()
+                pool_table = [
+                    [row["Pair"], row["Pool Address"][:8] + "..." if row["Pool Address"] != "unknown" else "Unknown", format_usd(row["USD Value"])]
+                    for _, row in pool_totals.iterrows()
+                ]
+                put_markdown("### LP Value by Pool (All Chains)")
+                put_table(pool_table, header=["Pair", "Pool Address", "USD Value"])
+
+            else:
+                # Filter for selected chain
+                chain_df = lp_df[lp_df["Chain"] == selected_chain]
+                chain_total = chain_df["USD Value"].sum()
+                put_markdown(f"**Total LP Value for {selected_chain.capitalize()}:** {format_usd(chain_total)}")
+
+                # Protocol breakdown
+                protocol_totals = chain_df.groupby("Protocol")["USD Value"].sum().reset_index()
+                protocol_table = [
+                    [row["Protocol"], format_usd(row["USD Value"])]
+                    for _, row in protocol_totals.iterrows()
+                ]
+                put_markdown(f"### LP Value by Protocol ({selected_chain.capitalize()})")
+                put_table(protocol_table, header=["Protocol", "USD Value"])
+
+                # Get unique protocols for the selected chain
+                protocols = sorted(chain_df["Protocol"].unique().tolist())
+                protocol_options = [{"label": "All Protocols", "value": "all"}] + [{"label": protocol, "value": protocol} for protocol in protocols]
+
+                # Render protocol dropdown
+                selected_protocol = await select(
+                    "Select Protocol",
+                    options=protocol_options,
+                    value="all",
+                    help_text="Choose a protocol to view LP positions for the selected chain."
+                )
+
+                # Clear protocol details scope and render pool breakdown
+                with use_scope('lp_protocol_details', clear=True):
+                    if selected_protocol == "all":
+                        # Pool breakdown for all protocols on the chain
+                        pool_totals = chain_df.groupby(["Pool Address", "Pair"])["USD Value"].sum().reset_index()
+                    else:
+                        # Filter for selected protocol
+                        pool_totals = chain_df[chain_df["Protocol"] == selected_protocol].groupby(["Pool Address", "Pair"])["USD Value"].sum().reset_index()
+
+                    pool_table = [
+                        [row["Pair"], row["Pool Address"][:8] + "..." if row["Pool Address"] != "unknown" else "Unknown", format_usd(row["USD Value"])]
+                        for _, row in pool_totals.iterrows()
+                    ]
+                    put_markdown(f"### LP Value by Pool ({selected_chain.capitalize()}" + (f", {selected_protocol})" if selected_protocol != "all" else ")"))
+                    put_table(pool_table, header=["Pair", "Pool Address", "USD Value"])
+
 @config(theme="yeti")
 async def main():
-    # Scope the entire dashboard
     with use_scope('dashboard', clear=True):
         put_markdown("# 🔮 🧙‍♂️ 🧪 💸 CM's Hedging Dashboard 💸 🧪 🧙‍♂️ 🔮")
-        put_text("\nMy wife's boyfriend says Bitcoin has no intrinsic value.")
+        put_text("\n My wife's boyfriend says Bitcoin has no intrinsic value.")
 
         HEDGABLE_TOKENS = load_hedgeable_tokens()
-        # Load data
         data = load_data()
         dataframes = data['dataframes']
         error_flags = data['error_flags']
         errors = data['errors']
 
-        # Display errors
         if errors.get('has_error', False):
             error_text = "\n".join([f"- {msg}" for msg in errors.get('messages', [])])
-            put_error(f"Data Fetching Errors:\n{error_text}")
-            logger.info(f"Displayed error messages: {error_text}")
+            put_error(error_text, f"Data Fetching Errors: {error_text}")
+            logger.info(f"Successfully displayed error messages: {error_text}")
         else:
             logger.info("No data fetching errors detected")
 
-        # Wallet Positions
-        put_markdown("## Wallet Positions")
-        meteora_updated = error_flags['lp'].get("last_meteora_lp_update", "Not available")
-        krystal_updated = error_flags['lp'].get("last_krystal_lp_update", "Not available")
-        put_markdown(f"**Last Meteora LP Update:** {meteora_updated}  \n**Last Krystal LP Update:** {krystal_updated}")
-        render_wallet_positions(dataframes, error_flags)
-
-        # PnL Section
-        put_markdown("## LP Positions PnL")
-        async def handle_calculate_pnl():
-            logger.info(f"Calculate PnL button clicked, executing {PNL_SHELL_SCRIPT}")
-            toast("Running pnl calculations... this may take a while, you can search for some new shitcoin in the meantime 📈", duration=10, color="warning")
-            success, output = await run_shell_script(PNL_SHELL_SCRIPT)
-            toast(
-                "PnL calculations completed successfully, it'a Lambo 🚗 or a scooter 🛴???" if success else f"PnL calc failed: {output}",
-                duration=5,
-                color="success" if success else "error"
-            )
-        put_buttons(
-            [{'label': 'Calculate PnL 💰', 'value': 'calculate_pnl', 'color': 'primary'}],
-            onclick=lambda _: run_async(handle_calculate_pnl())
-        )
-        render_pnl_tables(dataframes, error_flags)
-
+        
         # Hedging Dashboard
         put_markdown("## Hedging Dashboard")
-        if "Rebalancing" in dataframes or "Hedging" in dataframes:
+        if "Rebalanced" in dataframes or "Hedging" in dataframes:
             meteora_updated = error_flags['lp'].get("last_meteora_lp_update", "Not available")
             krystal_updated = error_flags['lp'].get("last_krystal_lp_update", "Not available")
             hedge_updated = error_flags['hedge'].get("last_updated_hedge", "Not available")
@@ -101,7 +215,6 @@ async def main():
                 f"**Last Krystal LP Update:** {krystal_updated}  \n"
                 f"**Last Hedge Data Update:** {hedge_updated}"
             )
-            # Update & Hedge buttons
             async def handle_run_workflow():
                 logger.info(f"Run Workflow clicked: {WORKFLOW_SHELL_SCRIPT}")
                 toast("Updating data... you can check BTC dominance in the meanwhile 🟠", duration=10, color="warning")
@@ -130,29 +243,25 @@ async def main():
                 onclick=lambda _: run_async(handle_run_hedge())
             )
 
-            # Render hedging table
             render_hedging_table(dataframes, data['errors'], hedge_actions)
         else:
             put_text("No rebalancing or hedging data available.")
 
         put_markdown("## Hedge Automation")
+        put_text("Select only the tokens you want to put on auto-hedge mode, and save the configuration. \nRemember to refresh the page so it can reload the data and the changes take effect.")
         options, auto_hedge_tokens = render_hedge_automation()
         hedgable_tokens = sorted([ticker.replace("USDT", "") for ticker in HEDGABLE_TOKENS.keys()])
         
         async def handle_config_change():
             if options:
-                # Log options and auto_hedge_tokens for debugging
                 logger.debug(f"Rendering form with options: {options}")
                 logger.debug(f"Current auto_hedge_tokens: {auto_hedge_tokens}")
-                
-                # Get pre-selected tokens
                 pre_selected = [token for token in hedgable_tokens if auto_hedge_tokens.get(token, False)]
-                
                 form_data = await input_group("Auto-hedge Tokens", [
                     checkbox(
                         name="auto_hedge_tokens",
                         options=options,
-                        value=pre_selected,  
+                        value=pre_selected,
                         inline=True,
                         help_text="Select tokens to auto-hedge"
                     ),
@@ -161,7 +270,6 @@ async def main():
                         buttons=[{'label': 'Save Configuration', 'value': 'save', 'color': 'success'}]
                     )
                 ])
-                
                 if form_data['submit'] == 'save':
                     new_auto_hedge_tokens = {token: token in form_data['auto_hedge_tokens'] for token in hedgable_tokens}
                     logger.debug(f"Saving new auto_hedge_tokens: {new_auto_hedge_tokens}")
@@ -184,6 +292,37 @@ async def main():
 
         await render_custom_hedge_section(hedge_actions)
         await render_add_token_mapping_section()
+
+
+        # Wallet Positions
+        put_markdown("## Wallet Positions")
+        meteora_updated = error_flags['lp'].get("last_meteora_lp_update", "Not available")
+        krystal_updated = error_flags['lp'].get("last_krystal_lp_update", "Not available")
+        put_markdown(f"**Last Meteora LP Update:** {meteora_updated}  \n**Last Krystal LP Update:** {krystal_updated}")
+        render_wallet_positions(dataframes, error_flags)
+
+        # PnL Section
+        put_markdown("## LP Positions P&L")
+        async def handle_calculate_pnl():
+            logger.info(f"Calculating PL button clicked, execute {PNL_SHELL_SCRIPT}")
+            toast("Running P&L calculations... this might take a while, you can search for some new shitcoin in the meantime 📈", duration=10, color="warning")
+            success, output = await run_shell_script(PNL_SHELL_SCRIPT)
+            toast("P&L calculations completed successfully, it'a Lambo 🚗 or a scooter 🛴???" if success else f"P&L calc failed: {output}", duration=5, color=("success" if success else "error"))
+        put_buttons(
+            [{'label': 'Calculate P&L 💰', 'value': 'calculate_pl', 'color': 'primary'}],
+            onclick=lambda x: run_async(handle_calculate_pnl())
+        )
+        render_pnl_tables(dataframes, error_flags)
+
+        # LP Summary Section (at the end)
+        put_markdown("## LP Summary")
+        async def handle_lp_summary():
+            logger.info("LP Summary button clicked")
+            await render_lp_summary(dataframes, error_flags)
+        put_buttons(
+            [{'label': 'View LP Summary 📊', 'value': 'lp_summary', 'color': 'primary'}],
+            onclick=lambda _: run_async(handle_lp_summary())
+        )
 
 def cleanup():
     asyncio.run(order_manager.close())

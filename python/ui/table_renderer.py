@@ -557,6 +557,7 @@ logger = logging.getLogger('render_ui_tables')
 
 async def render_custom_hedge_section(hedge_actions):
     put_markdown("## Custom Hedge Order")
+    put_text("Select token to hedge, enter UNSIGNED quantity, choose action (buy/sell), and submit to create a custom hedge order.")
     try:
         # Load hedgeable tokens from HEDGABLE_TOKENS
         logger.debug("Loading HEDGABLE_TOKENS for custom hedge")

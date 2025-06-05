@@ -80,6 +80,7 @@ async def render_add_token_mapping_section():
     Render a UI section to add a new token mapping.
     """
     put_markdown("## Add Token Mapping")
+    put_text("To use only when automatic onchain to bitget ticker mapping workflow finds a non-hedgeable token which has a different ticker on bitget. \n Enter the onchain ticker and the bitget ticker (WITHOUT USDT) to add a new mapping. \n If you want to add a token with a factor of 1000 or 10000, select it from the dropdown (AND ALSO WRITE 1000TICKER IN THE BITGET TICKER SECTION).")
     try:
         logger.debug("Rendering add token mapping section")
         put_buttons(
