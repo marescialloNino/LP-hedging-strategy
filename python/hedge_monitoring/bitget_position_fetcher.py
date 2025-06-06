@@ -8,6 +8,7 @@ from datetime import datetime
 import logging
 import json
 from pathlib import Path
+from config import get_config
 from common.path_config import LOG_DIR, HEDGING_HISTORY_CSV, HEDGING_LATEST_CSV, HEDGE_ERROR_FLAGS_PATH
 from common.bot_reporting import TGMessenger
 
@@ -125,8 +126,12 @@ async def fetch_and_print_positions():
         raise ValueError(error_msg)
 
     market = bg.BitgetMarket(account='H1')
+
+    config = get_config()
+    funding_threshold = config.get('hedge_monitoring', {}).get('funding_rate_alert_threshold', -20)
     
     try:
+        
         logger.info("Fetching positions from Bitget...")
         # Process positions
         positions = await market.get_positions_async()
@@ -138,7 +143,7 @@ async def fetch_and_print_positions():
             funding_rate = await fetch_4hr_funding_rate(market, symbol)
             
             # Send alert if funding rate is less than -10 bips
-            if funding_rate * 10000 <= -9: 
+            if funding_rate * 10000 <= funding_threshold: 
                 try:
                     alert_msg = (
                         f"⚠️ Bitget Funding Rate Alert ⚠️\n"

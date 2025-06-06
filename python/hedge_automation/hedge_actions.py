@@ -97,19 +97,6 @@ class HedgeActions:
             # Update manual_order_monitor.csv
             await update_manual_order_monitor_csv(order_data)
 
-            # Send Telegram alert with avgPrice
-            alert_message = (
-                f"Order Update:\n"
-                f"Token: {token}\n"
-                f"Action: {order_data['Rebalance Action']}\n"
-                f"Quantity: {order_data['Rebalance Value']:.5f}\n"
-                f"Order ID: {order_id}\n"
-                f"Status: {status}\n"
-                f"Fill Percentage: {order_data['fillPercentage']:.2f}%\n"
-                f"Average Price: {order_data['avgPrice']:.5f}"
-            )
-            send_telegram_alert(alert_message)
-
             # If order is resolved, append to history and clean up
             if status in ["SUCCESS", "EXECUTION_ERROR"]:
                 await append_to_order_history(order_data, "Manual")
@@ -126,7 +113,7 @@ class HedgeActions:
 
         except Exception as e:
             logger.error(f"Error processing WebSocket update: {e}", exc_info=True)
-            send_telegram_alert(f"WebSocket Error:\nToken: {token}\nOrder ID: {order_id}\nError: {str(e)}")
+            send_telegram_alert(f"WebSocket Monitoring Error:\nToken: {token}\nOrder ID: {order_id}\nError: {str(e)}")
 
     async def process_manual_order_result(self, result, token, action, quantity, timestamp):
         """Process the result of a manual order, update CSV, and subscribe to listener."""

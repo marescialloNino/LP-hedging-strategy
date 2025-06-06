@@ -9,3 +9,5 @@ hedge_rebalancer:
     negative: -0.02
     # minimum value to trigger a rebalance
     min_usd: 200
+hedge_monitoring:
+  funding_rate_alert_threshold: -20 # in bips

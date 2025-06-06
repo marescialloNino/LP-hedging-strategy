@@ -184,17 +184,6 @@ async def handle_order_update(order_data):
 
         await update_order_monitor_csv(order_data_updated, match_by_token_action=False)
 
-        alert_message = (
-            f"Auto Order Update:\n"
-            f"Token: {token}\n"
-            f"Action: {order_data_updated['Rebalance Action']}\n"
-            f"Quantity: {order_data_updated['Rebalance Value']:.5f}\n"
-            f"Order ID: {order_id}\n"
-            f"Status: {status}\n"
-            f"Fill Percentage: {order_data_updated['fillPercentage']:.2f}%\n"
-            f"Average Price: {avg_price:.5f}"
-        )
-        await send_telegram_alert(alert_message)
 
         if status in ["SUCCESS", "EXECUTION_ERROR"]:
             await append_to_order_history(order_data_updated, "Auto")
@@ -374,13 +363,6 @@ async def process_auto_hedge():
 
                     if result['success']:
                         logger.info(f"Order successfully submitted for {token}: Order ID {order_id}")
-                        await send_telegram_alert(
-                            f"Auto Order Submitted:\n"
-                            f"Token: {token}\n"
-                            f"Order ID: {order_id}\n"
-                            f"Quantity: {quantity:.5f}\n"
-                            f"Action: {action}"
-                        )
                         success = True
                         break
                     else:
