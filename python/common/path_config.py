@@ -15,6 +15,7 @@ LPMONITOR_YAML_CONFIG_PATH = Path(os.getenv('LPMONITOR_YAML_CONFIG_PATH', ROOT_D
 # ==================== last calculated positions files ====================
 METEORA_LATEST_CSV = DATA_DIR / "LP_meteora_positions_latest.csv"
 KRYSTAL_LATEST_CSV = DATA_DIR / "LP_krystal_positions_latest.csv"
+LP_SMOOTHED_CSV = DATA_DIR / "LP_positions_smoothed.csv"
 HEDGING_LATEST_CSV = DATA_DIR / "hedging_positions_latest.csv"
 REBALANCING_LATEST_CSV = DATA_DIR / "rebalancing_results.csv"
 

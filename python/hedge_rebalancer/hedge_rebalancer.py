@@ -244,6 +244,8 @@ def check_hedge_rebalance():
     positive_trigger = triggers.get('positive', 0.2)
     negative_trigger = triggers.get('negative', -0.2)
     min_usd_trigger = triggers.get('min_usd_trigger', 200.0)
+    use_smoothed_qty = triggers.get('use_smoothed_qty', False)
+    qty_smoothing_lookback = triggers.get('smoothing_lookback_h', False)  # hours
     
     logger.info(f"Starting hedge-rebalancer with positive_trigger={positive_trigger}, "
                 f"negative_trigger={negative_trigger}, min_usd_trigger={min_usd_trigger}...")
@@ -253,6 +255,7 @@ def check_hedge_rebalance():
     
     hedge_quantities = calculate_hedge_quantities()
     lp_quantities = calculate_lp_quantities()
+    lp_quantities_ma = compute_ma(lp_quantities, qty_smoothing_lookback)
     auto_hedge_tokens = load_auto_hedge_tokens()
 
     rebalance_results = []
@@ -262,7 +265,9 @@ def check_hedge_rebalance():
     for symbol in HEDGABLE_TOKENS:
         logger.debug(f"Processing token: {symbol}")
         hedge_qty = hedge_quantities[symbol]
-        lp_qty = lp_quantities[symbol]
+        lp_qty_raw = lp_quantities[symbol]
+        lp_qty_smoothed = lp_quantities_ma[symbol]
+        lp_qty = lp_qty_smoothed if use_smoothed_qty else lp_qty_raw
         abs_hedge_qty = abs(hedge_qty)
 
         if lp_qty == 0 and hedge_qty == 0:
@@ -295,7 +300,6 @@ def check_hedge_rebalance():
         trigger_auto_order = False
 
         if is_auto:
-
             # Calculate USD difference
             price_usd = get_token_price_usd(symbol)
             usd_difference = abs_difference * price_usd
@@ -350,7 +354,8 @@ def check_hedge_rebalance():
         rebalance_results.append({
             "Timestamp": timestamp_for_csv,
             "Token": symbol,
-            "LP Qty": lp_qty,
+            "LP Qty": lp_qty_raw,
+            "LP Qty MA": lp_qty_smoothed,
             "Hedged Qty": hedge_qty,
             "Difference": difference,
             "Percentage Diff": round(percentage_diff, 2),
