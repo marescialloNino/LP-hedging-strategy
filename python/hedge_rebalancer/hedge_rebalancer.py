@@ -13,6 +13,7 @@ from common.path_config import (
     LOG_DIR, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGING_LATEST_CSV,
     REBALANCING_HISTORY_DIR, REBALANCING_LATEST_CSV, CONFIG_DIR
 )
+from hedge_rebalancer.quantity_smoothing import compute_ma
 
 
 # Configure logging
@@ -240,13 +241,15 @@ def check_hedge_rebalance():
     """Compare LP quantities with absolute hedge quantities and output results."""
     # Load triggers from centralized config
     config = get_config()
-    triggers = config.get('hedge_rebalancer', {}).get('triggers', {})
+    config_hr = config.get('hedge_rebalancer', {})
+    triggers = config_hr.get('triggers', {})
     positive_trigger = triggers.get('positive', 0.2)
     negative_trigger = triggers.get('negative', -0.2)
     min_usd_trigger = triggers.get('min_usd_trigger', 200.0)
-    use_smoothed_qty = triggers.get('use_smoothed_qty', False)
-    qty_smoothing_lookback = triggers.get('smoothing_lookback_h', False)  # hours
-    
+    smoother = config_hr.get('smoother', {})
+    use_smoothed_qty = smoother.get('use_smoothed_qty', False)
+    qty_smoothing_lookback = smoother.get('smoothing_lookback_h', 24)  # hours
+
     logger.info(f"Starting hedge-rebalancer with positive_trigger={positive_trigger}, "
                 f"negative_trigger={negative_trigger}, min_usd_trigger={min_usd_trigger}...")
     
