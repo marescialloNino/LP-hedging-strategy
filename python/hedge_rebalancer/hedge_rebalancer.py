@@ -14,7 +14,6 @@ from common.path_config import (
     REBALANCING_HISTORY_DIR, REBALANCING_LATEST_CSV, CONFIG_DIR
 )
 
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -29,9 +28,9 @@ logger = logging.getLogger(__name__)
 HEDGABLE_TOKENS = load_hedgeable_tokens()
 
 mappings = load_ticker_mappings()
-SYMBOL_MAP=  mappings["SYMBOL_MAP"]
-BITGET_TOKENS_WITH_FACTOR_1000 =  mappings["BITGET_TOKENS_WITH_FACTOR_1000"]
-BITGET_TOKENS_WITH_FACTOR_10000 =  mappings["BITGET_TOKENS_WITH_FACTOR_10000"]
+SYMBOL_MAP = mappings["SYMBOL_MAP"]
+BITGET_TOKENS_WITH_FACTOR_1000 = mappings["BITGET_TOKENS_WITH_FACTOR_1000"]
+BITGET_TOKENS_WITH_FACTOR_10000 = mappings["BITGET_TOKENS_WITH_FACTOR_10000"]
 
 AUTO_HEDGE_TOKENS_PATH = CONFIG_DIR / "auto_hedge_tokens.json"
 
@@ -208,14 +207,13 @@ def calculate_lp_quantities():
     
     logger.debug(f"Final LP quantities: {lp_quantities}")
     return lp_quantities
+
 # Set event loop policy for Windows compatibility
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 def get_token_price_usd(symbol):
     """Fetch token price in USD using Bitget API or dataframe fallback."""
-
-    # Fall back to Bitget API
     async def fetch_price():
         market = bg.BitgetMarket(account='H1')
         try:
@@ -237,7 +235,7 @@ def get_token_price_usd(symbol):
         return 1.0
 
 def check_hedge_rebalance():
-    """Compare LP quantities with absolute hedge quantities and output results."""
+    """Compare LP quantities with absolute hedge quantities using net/gross ratio and output results."""
     # Load triggers from centralized config
     config = get_config()
     triggers = config.get('hedge_rebalancer', {}).get('triggers', {})
@@ -280,11 +278,18 @@ def check_hedge_rebalance():
         difference = lp_qty - abs_hedge_qty
         abs_difference = abs(difference)
         percentage_diff = (abs_difference / lp_qty) * 100 if lp_qty > 0 else 0
-
+        # Calculate net/gross ratio: (lp + hedge) / (lp - hedge)
+        net_gross_ratio = (
+            (lp_qty + hedge_qty) / (lp_qty - hedge_qty)
+            if (lp_qty - hedge_qty) != 0 else float('inf')
+        )
         
         logger.info(f"Token: {symbol}")
         logger.info(f"  LP Qty: {lp_qty}, Hedged Qty: {hedge_qty} (Short: {abs_hedge_qty})")
         logger.info(f"  Difference: {difference} ({percentage_diff:.2f}%) of LP")
+        logger.info(f"  Net/Gross Ratio: {net_gross_ratio:.2f}")
+
+
 
         # Check if token is auto-hedged
         is_auto = auto_hedge_tokens.get(symbol.replace("USDT", ""), False)
@@ -295,7 +300,7 @@ def check_hedge_rebalance():
         trigger_auto_order = False
 
         if is_auto:
-
+             
             # Calculate USD difference
             price_usd = get_token_price_usd(symbol)
             usd_difference = abs_difference * price_usd
@@ -318,7 +323,7 @@ def check_hedge_rebalance():
                 rebalance_value = abs_hedge_qty
                 logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} (no LP exposure) ***")
 
-            # Auto-hedging triggers
+            # Auto-hedging triggers using net/gross ratio
             if lp_qty > 0:
                 if skip_rebalance:
                     logger.info(f"  Skipping auto-hedge for {symbol}: USD difference ${usd_difference:.2f} < ${min_usd_trigger}")
@@ -326,13 +331,12 @@ def check_hedge_rebalance():
                     trigger_auto_order = True
                     logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty:.5f} for {symbol} (no hedge position) ***")
                 elif hedge_qty < 0:
-                    ratio = (lp_qty / abs_hedge_qty) - 1
-                    if ratio > positive_trigger:
+                    if net_gross_ratio > positive_trigger:
                         trigger_auto_order = True
-                        logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty - abs_hedge_qty:.5f} for {symbol} (ratio: {ratio:.2f}) ***")
-                    elif ratio < negative_trigger:
+                        logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {rebalance_value:.5f} for {symbol} (net/gross ratio: {net_gross_ratio:.2f}) ***")
+                    elif net_gross_ratio < negative_trigger:
                         trigger_auto_order = True
-                        logger.warning(f"  *** AUTO HEDGE TRIGGER: buy {abs_hedge_qty - lp_qty:.5f} for {symbol} (ratio: {ratio:.2f}) ***")
+                        logger.warning(f"  *** AUTO HEDGE TRIGGER: buy {rebalance_value:.5f} for {symbol} (net/gross ratio: {net_gross_ratio:.2f}) ***")
         else:
             # Non-auto-hedge: Suggest action based on difference
             if difference != 0:
@@ -343,7 +347,7 @@ def check_hedge_rebalance():
                 else:
                     rebalance_action = "buy"
                     rebalance_value = abs_difference
-                    logger.info(f"  Non-auto-hedge token {symbol}: Suggest {rebalance_action} {rebalance_value:.5f}  for manual rebalancing")
+                    logger.info(f"  Non-auto-hedge token {symbol}: Suggest {rebalance_action} {rebalance_value:.5f} for manual rebalancing")
             else:
                 logger.info(f"  Non-auto-hedge token {symbol}: No rebalancing needed (difference = 0)")
 
@@ -354,6 +358,8 @@ def check_hedge_rebalance():
             "Hedged Qty": hedge_qty,
             "Difference": difference,
             "Percentage Diff": round(percentage_diff, 2),
+            
+            "Net/Gross Ratio": round(net_gross_ratio, 2),
             "Rebalance Action": rebalance_action,
             "Rebalance Value": round(rebalance_value, 5),
             "Auto Hedge": is_auto,
@@ -369,8 +375,8 @@ def check_hedge_rebalance():
         
         headers = [
             "Timestamp", "Token", "LP Qty", "Hedged Qty", "Difference",
-            "Percentage Diff", "USD Difference", "Rebalance Action", "Rebalance Value",
-            "Auto Hedge", "Trigger Auto Order"
+            "Percentage Diff", "USD Difference", "Net/Gross Ratio",
+            "Rebalance Action", "Rebalance Value", "Auto Hedge", "Trigger Auto Order"
         ]
         
         with open(history_filename, mode='w', newline='') as f:
