@@ -94,7 +94,7 @@ def compute_ma(quantities, lookback=20, persist=True):
         try:
             # Save all columns in lp_smoothed_df (all tokens from quantities or previous CSV)
             lp_smoothed_df.to_csv(LP_SMOOTHED_CSV, mode='w', header=True)
-            logger.info(f"Saved smoothed quantities to {LP_SMOOTHED_CSV}: {lp_smoothed_df.to_dict()}")
+            logger.info(f"Saved smoothed quantities to {LP_SMOOTHED_CSV}")
         except Exception as e:
             logger.error(f"Error writing smoothed positions to CSV: {e}")
 
