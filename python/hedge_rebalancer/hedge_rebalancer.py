@@ -5,6 +5,7 @@ import csv
 from datetime import datetime
 import json
 from .datafeed import bitgetfeed as bg
+from .datafeed.broker_handler import BrokerHandler
 import asyncio
 from pathlib import Path
 from config import get_config
@@ -14,7 +15,6 @@ from common.path_config import (
     REBALANCING_HISTORY_DIR, REBALANCING_LATEST_CSV, CONFIG_DIR
 )
 from hedge_rebalancer.quantity_smoothing import compute_ma
-
 
 # Configure logging
 logging.basicConfig(
@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 HEDGABLE_TOKENS = load_hedgeable_tokens()
 
 mappings = load_ticker_mappings()
-SYMBOL_MAP=  mappings["SYMBOL_MAP"]
-BITGET_TOKENS_WITH_FACTOR_1000 =  mappings["BITGET_TOKENS_WITH_FACTOR_1000"]
-BITGET_TOKENS_WITH_FACTOR_10000 =  mappings["BITGET_TOKENS_WITH_FACTOR_10000"]
+SYMBOL_MAP = mappings["SYMBOL_MAP"]
+BITGET_TOKENS_WITH_FACTOR_1000 = mappings["BITGET_TOKENS_WITH_FACTOR_1000"]
+BITGET_TOKENS_WITH_FACTOR_10000 = mappings["BITGET_TOKENS_WITH_FACTOR_10000"]
 
 AUTO_HEDGE_TOKENS_PATH = CONFIG_DIR / "auto_hedge_tokens.json"
 
@@ -209,36 +209,54 @@ def calculate_lp_quantities():
     
     logger.debug(f"Final LP quantities: {lp_quantities}")
     return lp_quantities
+
 # Set event loop policy for Windows compatibility
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-def get_token_price_usd(symbol):
-    """Fetch token price in USD using Bitget API or dataframe fallback."""
 
-    # Fall back to Bitget API
-    async def fetch_price():
-        market = bg.BitgetMarket(account='H1')
-        try:
-            ticker = await market._exchange_async.fetch_ticker(symbol)
-            price = float(ticker.get('last', 1.0))
-            logger.debug(f"Fetched price for {symbol} from Bitget API: ${price:.2f}")
-            return price
-        except Exception as e:
-            logger.error(f"Error fetching price for {symbol} from Bitget API: {str(e)}")
-            return 1.0
-        finally:
-            await market._exchange_async.close()
-
-    # Run async fetch synchronously
+async def get_token_prices_usd(symbols):
+    """Fetch token prices in USD for all symbols in a single Bitget API call."""
+    params = {'exchange_trade': 'dummy', 'account_trade': 'dummy'}
+    end_point = BrokerHandler.build_end_point('bitget', 'dummy')
+    bh = BrokerHandler(market_watch='bitget', end_point_trade=end_point, strategy_param=params, logger_name='default')
+    prices = {symbol: 1.0 for symbol in symbols}
     try:
-        return asyncio.run(fetch_price())
+        if not symbols:
+            logger.warning("No symbols provided for price fetch")
+            return {symbol: 1.0 for symbol in HEDGABLE_TOKENS}
+        
+        logger.debug(f"Fetching prices for symbols: {symbols}")
+        # Use symbol map to handle potential format differences (e.g., GMXUSDT -> GMX/USDT)
+        symbol_map = {symbol: SYMBOL_MAP.get(symbol, symbol) for symbol in symbols}
+        async def fetch_ticker(symbol):
+            try:
+                ticker = await end_point._exchange_async.fetch_ticker(symbol)
+                return symbol, float(ticker.get('last', 1.0))
+            except Exception as e:
+                logger.warning(f"Error fetching price for {symbol} on bitget: {str(e)}")
+                return symbol, 1.0
+        
+        tasks = [fetch_ticker(symbol) for symbol in set(symbol_map.values())]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        symbol_prices = {symbol: price for symbol, price in results if not isinstance(price, Exception)}
+        for symbol in symbols:
+            mapped_symbol = symbol_map[symbol]
+            price = symbol_prices.get(mapped_symbol, 1.0)
+            prices[symbol] = price
+            logger.debug(f"Fetched price for {symbol} (mapped: {mapped_symbol}): ${price:.2f}")
     except Exception as e:
-        logger.error(f"Failed to run async price fetch for {symbol}: {str(e)}")
-        return 1.0
+        logger.error(f"Error fetching prices for symbols on bitget: {str(e)}")
+        prices = {symbol: 1.0 for symbol in symbols}
+        logger.warning(f"Set default price of $1.0 for all symbols due to fetch error")
+    finally:
+        await end_point._exchange_async.close()
+        await bh.close_exchange_async()
+    return prices
 
 def check_hedge_rebalance():
-    """Compare LP quantities with absolute hedge quantities and output results."""
+    """Compare LP quantities with absolute hedge quantities using net/gross ratio and output results."""
     # Load triggers from centralized config
     config = get_config()
     config_hr = config.get('hedge_rebalancer', {})
@@ -251,7 +269,8 @@ def check_hedge_rebalance():
     qty_smoothing_lookback = smoother.get('smoothing_lookback_h', 24)  # hours
 
     logger.info(f"Starting hedge-rebalancer with positive_trigger={positive_trigger}, "
-                f"negative_trigger={negative_trigger}, min_usd_trigger={min_usd_trigger}...")
+                f"negative_trigger={negative_trigger}, min_usd_trigger={min_usd_trigger}, "
+                f"use_smoothed_qty={use_smoothed_qty}, qty_smoothing_lookback={qty_smoothing_lookback}...")
     
     # Sync auto_hedge_tokens.json with HEDGABLE_TOKENS before calculations
     sync_auto_hedge_tokens()
@@ -261,6 +280,10 @@ def check_hedge_rebalance():
     lp_quantities_ma = compute_ma(lp_quantities, qty_smoothing_lookback)
     auto_hedge_tokens = load_auto_hedge_tokens()
 
+    # Fetch prices for all relevant tokens at once
+    relevant_symbols = [symbol for symbol in HEDGABLE_TOKENS if lp_quantities.get(symbol, 0) != 0 or hedge_quantities.get(symbol, 0) != 0]
+    prices = asyncio.run(get_token_prices_usd(relevant_symbols))
+
     rebalance_results = []
     timestamp_for_csv = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
     timestamp_for_filename = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
@@ -269,7 +292,7 @@ def check_hedge_rebalance():
         logger.debug(f"Processing token: {symbol}")
         hedge_qty = hedge_quantities[symbol]
         lp_qty_raw = lp_quantities[symbol]
-        lp_qty_smoothed = lp_quantities_ma[symbol]
+        lp_qty_smoothed = lp_quantities_ma.get(symbol, lp_qty_raw)  # Use raw if smoothed is missing
         lp_qty = lp_qty_smoothed if use_smoothed_qty else lp_qty_raw
         abs_hedge_qty = abs(hedge_qty)
 
@@ -288,11 +311,21 @@ def check_hedge_rebalance():
         difference = lp_qty - abs_hedge_qty
         abs_difference = abs(difference)
         percentage_diff = (abs_difference / lp_qty) * 100 if lp_qty > 0 else 0
+        # Calculate net/gross ratio: (lp + hedge) / (lp - hedge)
+        net_gross_ratio = (
+            (lp_qty + hedge_qty) / (lp_qty - hedge_qty)
+            if (lp_qty - hedge_qty) != 0 else float('inf')
+        )
 
-        
         logger.info(f"Token: {symbol}")
-        logger.info(f"  LP Qty: {lp_qty}, Hedged Qty: {hedge_qty} (Short: {abs_hedge_qty})")
-        logger.info(f"  Difference: {difference} ({percentage_diff:.2f}%) of LP")
+        logger.info(f"  LP Qty Raw: {lp_qty_raw:.4f}, Smoothed: {lp_qty_smoothed:.4f})")
+        logger.info(f"  Hedged Qty: {hedge_qty:.4f} (Short: {abs_hedge_qty:.4f})")
+        logger.info(f"  Difference: {difference:.4f} ({percentage_diff:.2f}%)")
+        logger.info(f"  Net/Gross Ratio: {net_gross_ratio:.2f}")
+
+        # Calculate USD difference using batched prices
+        price_usd = prices.get(symbol, 1.0)
+        usd_difference = abs_difference * price_usd
 
         # Check if token is auto-hedged
         is_auto = auto_hedge_tokens.get(symbol.replace("USDT", ""), False)
@@ -303,9 +336,6 @@ def check_hedge_rebalance():
         trigger_auto_order = False
 
         if is_auto:
-            # Calculate USD difference
-            price_usd = get_token_price_usd(symbol)
-            usd_difference = abs_difference * price_usd
             # Auto-hedge: Apply full rebalancing logic with USD trigger
             skip_rebalance = usd_difference < min_usd_trigger
 
@@ -325,7 +355,7 @@ def check_hedge_rebalance():
                 rebalance_value = abs_hedge_qty
                 logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} (no LP exposure) ***")
 
-            # Auto-hedging triggers
+            # Auto-hedging triggers using net/gross ratio
             if lp_qty > 0:
                 if skip_rebalance:
                     logger.info(f"  Skipping auto-hedge for {symbol}: USD difference ${usd_difference:.2f} < ${min_usd_trigger}")
@@ -333,13 +363,14 @@ def check_hedge_rebalance():
                     trigger_auto_order = True
                     logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty:.5f} for {symbol} (no hedge position) ***")
                 elif hedge_qty < 0:
-                    ratio = (lp_qty / abs_hedge_qty) - 1
-                    if ratio > positive_trigger:
+                    if net_gross_ratio > positive_trigger:
                         trigger_auto_order = True
-                        logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty - abs_hedge_qty:.5f} for {symbol} (ratio: {ratio:.2f}) ***")
-                    elif ratio < negative_trigger:
+                        rebalance_value = lp_qty - abs_hedge_qty
+                        logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {rebalance_value:.5f} for {symbol} (net/gross ratio: {net_gross_ratio:.2f}) ***")
+                    elif net_gross_ratio < negative_trigger:
                         trigger_auto_order = True
-                        logger.warning(f"  *** AUTO HEDGE TRIGGER: buy {abs_hedge_qty - lp_qty:.5f} for {symbol} (ratio: {ratio:.2f}) ***")
+                        rebalance_value = abs_hedge_qty - lp_qty
+                        logger.warning(f"  *** AUTO HEDGE TRIGGER: buy {rebalance_value:.5f} for {symbol} (net/gross ratio: {net_gross_ratio:.2f}) ***")
         else:
             # Non-auto-hedge: Suggest action based on difference
             if difference != 0:
@@ -350,7 +381,7 @@ def check_hedge_rebalance():
                 else:
                     rebalance_action = "buy"
                     rebalance_value = abs_difference
-                    logger.info(f"  Non-auto-hedge token {symbol}: Suggest {rebalance_action} {rebalance_value:.5f}  for manual rebalancing")
+                    logger.info(f"  Non-auto-hedge token {symbol}: Suggest {rebalance_action} {rebalance_value:.5f} for manual rebalancing")
             else:
                 logger.info(f"  Non-auto-hedge token {symbol}: No rebalancing needed (difference = 0)")
 
@@ -362,6 +393,7 @@ def check_hedge_rebalance():
             "Hedged Qty": hedge_qty,
             "Difference": difference,
             "Percentage Diff": round(percentage_diff, 2),
+            "Net/Gross Ratio": round(net_gross_ratio, 2),
             "Rebalance Action": rebalance_action,
             "Rebalance Value": round(rebalance_value, 5),
             "Auto Hedge": is_auto,
@@ -376,9 +408,9 @@ def check_hedge_rebalance():
         latest_filename = REBALANCING_LATEST_CSV
         
         headers = [
-            "Timestamp", "Token", "LP Qty", "Hedged Qty", "Difference",
-            "Percentage Diff", "USD Difference", "Rebalance Action", "Rebalance Value",
-            "Auto Hedge", "Trigger Auto Order"
+            "Timestamp", "Token", "LP Qty", "LP Qty MA", "Hedged Qty", "Difference",
+            "Percentage Diff", "USD Difference", "Net/Gross Ratio",
+            "Rebalance Action", "Rebalance Value", "Auto Hedge", "Trigger Auto Order"
         ]
         
         with open(history_filename, mode='w', newline='') as f:

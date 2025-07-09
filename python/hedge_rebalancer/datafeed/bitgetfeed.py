@@ -8,7 +8,7 @@ from .motherfeeder import MotherFeeder
 
 
 class BitgetMarket(MotherFeeder):
-    def __init__(self, account=0, request_timeout=30000, *args, **kwargs):
+    def __init__(self, account='', request_timeout=30000, *args, **kwargs):
         self.account = account  # needed by next step
         self.request_timeout = request_timeout
         self.__API_KEY = ''
