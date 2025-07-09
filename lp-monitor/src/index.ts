@@ -7,7 +7,6 @@ import path from 'path';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 
-
 // Get data directory from environment or use default with absolute path
 const logDir = process.env.LP_HEDGE_LOG_DIR || path.join(process.cwd(), '../logs');
 const ERROR_FLAGS_PATH = path.join(logDir, 'lp_fetching_errors.json');
@@ -22,6 +21,30 @@ interface ErrorFlags {
   LP_FETCHING_VAULT_ERROR: boolean;
   vault_error_message: string;
   last_vault_lp_update: string;
+}
+
+// Utility function for retrying async operations
+async function retryOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 1,
+  delayMs: number = 30000
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt <= maxRetries) {
+        logger.warn(`Attempt ${attempt} failed: ${String(error)}. Retrying in ${delayMs / 1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else {
+        logger.error(`All ${maxRetries + 1} attempts failed. Giving up.`);
+        throw error;
+      }
+    }
+  }
+  throw lastError; // This line should never be reached due to the throw in the loop
 }
 
 // Read existing error flags to preserve timestamps and messages
@@ -74,7 +97,7 @@ async function updateErrorFlags(flags: ErrorFlags) {
 async function processSolanaWallet(walletAddress: string): Promise<any[]> {
   logger.info(`Processing Solana wallet: ${walletAddress}`);
   try {
-    const meteoraPositions = await retrieveMeteoraPositions(walletAddress);
+    const meteoraPositions = await retryOperation(() => retrieveMeteoraPositions(walletAddress));
     if (meteoraPositions.length > 0) {
       const records = await generateMeteoraCSV(walletAddress, meteoraPositions);
       return records;
@@ -90,26 +113,36 @@ async function processSolanaWallet(walletAddress: string): Promise<any[]> {
 async function processEvmWallet(walletAddress: string): Promise<any[]> {
   logger.info(`Processing EVM wallet: ${walletAddress}`);
   const chainIds = config.KRYSTAL_CHAIN_IDS.join(',');
-  const krystalPositions = await retrieveKrystalPositions(walletAddress, chainIds);
-  if (krystalPositions.length > 0) {
-    const records = await generateKrystalCSV(walletAddress, krystalPositions);
-    return records;
-  } else {
-    logger.info(`No Krystal positions found for ${walletAddress} on chains ${chainIds}`);
-    return [];
+  try {
+    const krystalPositions = await retryOperation(() => retrieveKrystalPositions(walletAddress, chainIds));
+    if (krystalPositions.length > 0) {
+      const records = await generateKrystalCSV(walletAddress, krystalPositions);
+      return records;
+    } else {
+      logger.info(`No Krystal positions found for ${walletAddress} on chains ${chainIds}`);
+      return [];
+    }
+  } catch (error) {
+    throw error; // Rethrow to ensure main() catches it
   }
 }
 
 async function processEvmVaultWallet(walletAddress: string, chainIds: string[], vaultShare: number): Promise<any[]> {
   logger.info(`Processing EVM vault wallet: ${walletAddress} on chain: ${chainIds.join(',')}`);
   const chainIdsStr = chainIds.join(',');
-  const krystalPositions = await retrieveKrystalVaultPositions(walletAddress, chainIdsStr, vaultShare);
-  if (krystalPositions.length > 0) {
-    const records = await generateKrystalCSV(walletAddress, krystalPositions);
-    return records;
-  } else {
-    logger.info(`No Krystal positions found for vault wallet ${walletAddress} on chains ${chainIdsStr}`);
-    return [];
+  try {
+    const krystalPositions = await retryOperation(() =>
+      retrieveKrystalVaultPositions(walletAddress, chainIdsStr, vaultShare)
+    );
+    if (krystalPositions.length > 0) {
+      const records = await generateKrystalCSV(walletAddress, krystalPositions);
+      return records;
+    } else {
+      logger.info(`No Krystal positions found for vault wallet ${walletAddress} on chains ${chainIdsStr}`);
+      return [];
+    }
+  } catch (error) {
+    throw error; // Rethrow to ensure main() catches it
   }
 }
 
@@ -175,19 +208,19 @@ async function main() {
     }
   }
 
-// Process vault EVM wallets (Krystal positions)
-for (const [vaultWallet, entry] of Object.entries(config.KRYSTAL_VAULT_WALLET_CHAIN_MAP) as [string, { chains: string[]; vaultShare: number }][]) {
-  try {
-    const { chains, vaultShare } = entry;
-    const krystalRecords = await processEvmVaultWallet(vaultWallet, chains, vaultShare);
-    allKrystalRecords = allKrystalRecords.concat(krystalRecords);
-  } catch (error) {
-    const errorMsg = `Failed to process vault wallet ${vaultWallet}: ${String(error)}`;
-    logger.error(errorMsg);
-    vaultSuccess = false;
-    vaultErrorMessage += (vaultErrorMessage ? '; ' : '') + errorMsg;
+  // Process vault EVM wallets (Krystal positions)
+  for (const [vaultWallet, entry] of Object.entries(config.KRYSTAL_VAULT_WALLET_CHAIN_MAP) as [string, { chains: string[]; vaultShare: number }][]) {
+    try {
+      const { chains, vaultShare } = entry;
+      const krystalRecords = await processEvmVaultWallet(vaultWallet, chains, vaultShare);
+      allKrystalRecords = allKrystalRecords.concat(krystalRecords);
+    } catch (error) {
+      const errorMsg = `Failed to process vault wallet ${vaultWallet}: ${String(error)}`;
+      logger.error(errorMsg);
+      vaultSuccess = false;
+      vaultErrorMessage += (vaultErrorMessage ? '; ' : '') + errorMsg;
+    }
   }
-}
 
   // Write Krystal latest positions
   if (allKrystalRecords.length > 0) {

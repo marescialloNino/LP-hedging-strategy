@@ -33,6 +33,9 @@ mappings = load_ticker_mappings()
 SYMBOL_MAP = mappings["SYMBOL_MAP"]
 BITGET_TOKENS_WITH_FACTOR_1000 = mappings["BITGET_TOKENS_WITH_FACTOR_1000"]
 BITGET_TOKENS_WITH_FACTOR_10000 = mappings["BITGET_TOKENS_WITH_FACTOR_10000"]
+SYMBOL_MAP = mappings["SYMBOL_MAP"]
+BITGET_TOKENS_WITH_FACTOR_1000 = mappings["BITGET_TOKENS_WITH_FACTOR_1000"]
+BITGET_TOKENS_WITH_FACTOR_10000 = mappings["BITGET_TOKENS_WITH_FACTOR_10000"]
 
 AUTO_HEDGE_TOKENS_PATH = CONFIG_DIR / "auto_hedge_tokens.json"
 
@@ -257,6 +260,7 @@ async def get_token_prices_usd(symbols):
 
 def check_hedge_rebalance():
     """Compare LP quantities with absolute hedge quantities using net/gross ratio and output results."""
+    """Compare LP quantities with absolute hedge quantities using net/gross ratio and output results."""
     # Load triggers from centralized config
     config = get_config()
     config_hr = config.get('hedge_rebalancer', {})
@@ -356,6 +360,7 @@ def check_hedge_rebalance():
                 logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} (no LP exposure) ***")
 
             # Auto-hedging triggers using net/gross ratio
+            # Auto-hedging triggers using net/gross ratio
             if lp_qty > 0:
                 if skip_rebalance:
                     logger.info(f"  Skipping auto-hedge for {symbol}: USD difference ${usd_difference:.2f} < ${min_usd_trigger}")
@@ -364,12 +369,11 @@ def check_hedge_rebalance():
                     logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty:.5f} for {symbol} (no hedge position) ***")
                 elif hedge_qty < 0:
                     if net_gross_ratio > positive_trigger:
+                    if net_gross_ratio > positive_trigger:
                         trigger_auto_order = True
-                        rebalance_value = lp_qty - abs_hedge_qty
                         logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {rebalance_value:.5f} for {symbol} (net/gross ratio: {net_gross_ratio:.2f}) ***")
                     elif net_gross_ratio < negative_trigger:
                         trigger_auto_order = True
-                        rebalance_value = abs_hedge_qty - lp_qty
                         logger.warning(f"  *** AUTO HEDGE TRIGGER: buy {rebalance_value:.5f} for {symbol} (net/gross ratio: {net_gross_ratio:.2f}) ***")
         else:
             # Non-auto-hedge: Suggest action based on difference
@@ -381,6 +385,7 @@ def check_hedge_rebalance():
                 else:
                     rebalance_action = "buy"
                     rebalance_value = abs_difference
+                    logger.info(f"  Non-auto-hedge token {symbol}: Suggest {rebalance_action} {rebalance_value:.5f} for manual rebalancing")
                     logger.info(f"  Non-auto-hedge token {symbol}: Suggest {rebalance_action} {rebalance_value:.5f} for manual rebalancing")
             else:
                 logger.info(f"  Non-auto-hedge token {symbol}: No rebalancing needed (difference = 0)")
