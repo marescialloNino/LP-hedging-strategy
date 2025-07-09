@@ -360,7 +360,6 @@ def check_hedge_rebalance():
                 logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} (no LP exposure) ***")
 
             # Auto-hedging triggers using net/gross ratio
-            # Auto-hedging triggers using net/gross ratio
             if lp_qty > 0:
                 if skip_rebalance:
                     logger.info(f"  Skipping auto-hedge for {symbol}: USD difference ${usd_difference:.2f} < ${min_usd_trigger}")
@@ -368,7 +367,6 @@ def check_hedge_rebalance():
                     trigger_auto_order = True
                     logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty:.5f} for {symbol} (no hedge position) ***")
                 elif hedge_qty < 0:
-                    if net_gross_ratio > positive_trigger:
                     if net_gross_ratio > positive_trigger:
                         trigger_auto_order = True
                         logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {rebalance_value:.5f} for {symbol} (net/gross ratio: {net_gross_ratio:.2f}) ***")
