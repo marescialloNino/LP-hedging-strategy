@@ -64,7 +64,7 @@ def compute_ma(quantities, lookback=20, persist=True):
                 alpha = 1 - np.exp(-time_diff / lookback)
                 # Compute EWMA for each token
                 lp_smoothed = (1 - alpha) * lp_smoothed_prev.iloc[-1].fillna(0.0) + alpha * quantities
-                logger.debug(f"Computed EWMA with alpha={alpha:.4f}")
+                logger.info(f"Computed EWMA with alpha={alpha:.4f}")
             else:
                 # If CSV is empty or invalid, use current quantities
                 lp_smoothed = quantities

@@ -220,7 +220,7 @@ async def sync_hedgeable_tokens():
 
         # Skip if CA already in hedgeable tokens for this chain
         if chain in existing_contracts and contract_address in existing_contracts[chain]:
-            logger.info(f"Contract {contract_address} ({ticker}) already in hedgeable tokens for {chain}")
+            logger.debug(f"Contract {contract_address} ({ticker}) already in hedgeable tokens for {chain}")
             continue
 
         # Skip USDC and USDT for hedgeable tokens
@@ -241,10 +241,10 @@ async def sync_hedgeable_tokens():
                 logger.info(f"Added new CA for existing token: {normalized_ticker} ({contract_address}) on {chain}, matched {bitget_symbol}")
                 await send_telegram_alert(
                     f" 🚨 New Contract Address for Existing Token: 🚨 \n"
-                    f"Ticker: {normalized_ticker}\n"
-                    f"Contract Address: {contract_address}\n"
-                    f"Chain: {chain}\n"
-                    f"Bitget Symbol: {bitget_symbol}"
+                    f" Ticker: {normalized_ticker} \n"
+                    f" Contract Address: {contract_address} \n"
+                    f" Chain: {chain} \n"
+                    f" Bitget Symbol: {bitget_symbol}"
                 )
             continue
 
@@ -260,9 +260,9 @@ async def sync_hedgeable_tokens():
                 logger.info(f"Added new hedgeable token: {normalized_ticker} ({contract_address}) on {chain}, matched {bitget_symbol}")
                 await send_telegram_alert(
                     f" 🚨 New Hedgeable Token Added: 🚨\n"
-                    f"Ticker: {normalized_ticker}\n"
-                    f"Contract Address: {contract_address}\n"
-                    f"Chain: {chain}\n"
+                    f" Ticker: {normalized_ticker} \n"
+                    f" Contract Address: {contract_address} \n"
+                    f" Chain: {chain} \n"
                     f" 🚨 Matched Bitget Symbol: {bitget_symbol} 🚨"
                 )
 
@@ -281,7 +281,7 @@ async def main():
         await sync_hedgeable_tokens()
     except Exception as e:
         logger.error(f"Sync error: {str(e)}")
-        await send_telegram_alert(f"🚨🚨🚨 Hedgeable Tokens Syncronization Error:\nError: {str(e)}")
+        await send_telegram_alert(f"🚨🚨🚨 Hedgeable Tokens Syncronization Error:\n Error: {str(e)}")
 
 if __name__ == "__main__":
     if sys.platform == 'win32':
