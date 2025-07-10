@@ -9,7 +9,8 @@ from .datafeed.broker_handler import BrokerHandler
 import asyncio
 from pathlib import Path
 from config import get_config
-from common.data_loader import load_hedgeable_tokens, load_ticker_mappings
+from common.bot_reporting import TGMessenger
+from common.data_loader import load_hedgeable_tokens, load_ticker_mappings, load_smoothed_quantities
 from common.path_config import (
     LOG_DIR, METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, HEDGING_LATEST_CSV,
     REBALANCING_HISTORY_DIR, REBALANCING_LATEST_CSV, CONFIG_DIR
@@ -28,6 +29,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 HEDGABLE_TOKENS = load_hedgeable_tokens()
+
+last_smoothing_timestamp, last_smoothing_dict = load_smoothed_quantities()
+
 
 mappings = load_ticker_mappings()
 SYMBOL_MAP = mappings["SYMBOL_MAP"]
@@ -321,8 +325,9 @@ def check_hedge_rebalance():
             if (lp_qty - hedge_qty) != 0 else float('inf')
         )
 
-        logger.info(f"Token: {symbol}")
+        logger.info(f"  Token: {symbol}")
         logger.info(f"  LP Qty Raw: {lp_qty_raw:.4f}, Smoothed: {lp_qty_smoothed:.4f})")
+        logger.info(f"  Last Smoothed Qty: {last_smoothing_dict[symbol]:.4f}, last Smoothing Timestamp: {last_smoothing_timestamp}")
         logger.info(f"  Hedged Qty: {hedge_qty:.4f} (Short: {abs_hedge_qty:.4f})")
         logger.info(f"  Difference: {difference:.4f} ({percentage_diff:.2f}%)")
         logger.info(f"  Net/Gross Ratio: {net_gross_ratio:.2f}")
@@ -366,13 +371,47 @@ def check_hedge_rebalance():
                 elif hedge_qty == 0:
                     trigger_auto_order = True
                     logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {lp_qty:.5f} for {symbol} (no hedge position) ***")
+                    # Send Telegram alert
+                    message = (
+                        f"*AUTO HEDGE TRIGGER* \n"
+                        f"Token: {symbol} \n"
+                        f"Hedge Qty: {hedge_qty}, LP Qty Raw: {lp_qty_raw:.4f}, Smoothed: {lp_qty_smoothed:.4f}) \n"
+                        f"Last Smoothed Qty: {last_smoothing_dict[symbol]:.4f}, last Smoothing Timestamp: {last_smoothing_timestamp} \n"
+                        f"positive_trigger={positive_trigger}, negative_trigger={negative_trigger}, min_usd_trigger={min_usd_trigger},smoothing_lookback_hrs={qty_smoothing_lookback}"
+                        f"Action: Sell {lp_qty:.5f} \n"
+                        f"Net/Gross Ratio: {net_gross_ratio:.2f} \n"
+                        f"Timestamp: {timestamp_for_csv}"
+                    )
+                    TGMessenger.send(message,'LP eagle')
                 elif hedge_qty < 0:
                     if net_gross_ratio > positive_trigger:
                         trigger_auto_order = True
                         logger.warning(f"  *** AUTO HEDGE TRIGGER: sell {rebalance_value:.5f} for {symbol} (net/gross ratio: {net_gross_ratio:.2f}) ***")
+                        message = (
+                        f"*AUTO HEDGE TRIGGER* \n"
+                        f"Token: {symbol} \n"
+                        f"Hedge Qty: {hedge_qty}, LP Qty Raw: {lp_qty_raw:.4f}, Smoothed: {lp_qty_smoothed:.4f}) \n"
+                        f"Last Smoothed Qty: {last_smoothing_dict[symbol]:.4f}, last Smoothing Timestamp: {last_smoothing_timestamp} \n"
+                        f"positive_trigger={positive_trigger}, negative_trigger={negative_trigger}, min_usd_trigger={min_usd_trigger},smoothing_lookback_hrs={qty_smoothing_lookback}"
+                        f"Action: Sell {rebalance_value:.5f} \n"
+                        f"Net/Gross Ratio: {net_gross_ratio:.2f} \n"
+                        f"Timestamp: {timestamp_for_csv}"
+                        )
+                        TGMessenger.send(message,'LP eagle')
                     elif net_gross_ratio < negative_trigger:
                         trigger_auto_order = True
                         logger.warning(f"  *** AUTO HEDGE TRIGGER: buy {rebalance_value:.5f} for {symbol} (net/gross ratio: {net_gross_ratio:.2f}) ***")
+                        message = (
+                            f"*AUTO HEDGE TRIGGER* \n"
+                            f"Token: {symbol} \n"
+                            f"Hedge Qty: {hedge_qty}, LP Qty Raw: {lp_qty_raw:.4f}, Smoothed: {lp_qty_smoothed:.4f}) \n"
+                            f"Last Smoothed Qty: {last_smoothing_dict[symbol]:.4f}, last Smoothing Timestamp: {last_smoothing_timestamp} \n"
+                            f"positive_trigger={positive_trigger}, negative_trigger={negative_trigger}, min_usd_trigger={min_usd_trigger},smoothing_lookback_hrs={qty_smoothing_lookback}"
+                            f"Action: Buy {rebalance_value:.5f} \n"
+                            f"Net/Gross Ratio: {net_gross_ratio:.2f} \n"
+                            f"Timestamp: {timestamp_for_csv}"
+                        )
+                        TGMessenger.send(message,'LP eagle')
         else:
             # Non-auto-hedge: Suggest action based on difference
             if difference != 0:

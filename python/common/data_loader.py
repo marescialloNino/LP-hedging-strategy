@@ -3,10 +3,11 @@ import json
 import logging
 import os
 from pathlib import Path
+from datetime import datetime
 from common.path_config import (
     REBALANCING_LATEST_CSV, KRYSTAL_LATEST_CSV, METEORA_LATEST_CSV, HEDGING_LATEST_CSV, HEDGE_ERROR_FLAGS_PATH, LP_ERROR_FLAGS_PATH,
     METEORA_PNL_CSV, KRYSTAL_POOL_PNL_CSV, LOG_DIR, HEDGEABLE_TOKENS_JSON, ENCOUNTERED_TOKENS_JSON, TICKER_MAPPINGS_PATH, CONFIG_DIR,
-    ACTIVE_POOLS_TVL
+    ACTIVE_POOLS_TVL, LP_SMOOTHED_CSV
 )
 
 
@@ -210,4 +211,30 @@ def save_ticker_mappings(mappings: dict):
         logger.info("Ticker mappings saved to ticker_mappings.json")
     except Exception as e:
         logger.error(f"Error saving ticker_mappings.json: {e}")
+
+
+def load_smoothed_quantities() -> tuple[datetime, dict]:
+    """
+    Load the most recent smoothed quantities and timestamp from LP_SMOOTHED_CSV.
+    :return: Tuple of (timestamp: datetime, quantities: dict) where quantities has token symbols as keys and smoothed quantities as values
+    """
+    try:
+        if not LP_SMOOTHED_CSV.exists():
+            logger.warning(f"Smoothed quantities file not found: {LP_SMOOTHED_CSV}")
+            return None, {}
+
+        df = pd.read_csv(LP_SMOOTHED_CSV, index_col=0, parse_dates=True)
+        if df.empty:
+            logger.warning(f"Smoothed quantities CSV is empty: {LP_SMOOTHED_CSV}")
+            return None, {}
+
+        # Get the most recent row and its timestamp
+        latest_timestamp = df.index[-1]
+        latest_quantities = df.iloc[-1].to_dict()
+        logger.debug(f"Loaded smoothed quantities at {latest_timestamp}: {latest_quantities}")
+        return latest_timestamp, {k: float(v) for k, v in latest_quantities.items() if not pd.isna(v)}
+    
+    except Exception as e:
+        logger.error(f"Error loading smoothed quantities from {LP_SMOOTHED_CSV}: {str(e)}")
+        return None, {}
 
