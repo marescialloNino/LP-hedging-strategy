@@ -314,9 +314,16 @@ def check_hedge_rebalance():
 
         if hedge_qty > 0:
             logger.warning(f"Unexpected positive hedge quantity for {symbol}: {hedge_qty}")
-            continue
+            message = (
+                        f"*LONG HEDGE WARNING* \n"
+                        f"Token: {symbol} \n"
+                        f"Positive Hedge Qty: {hedge_qty} \n"
+                        f"Long position in the hedging positions"
+                    )
+            TGMessenger.send(message,'LP eagle')
+            # continue
 
-        difference = lp_qty - abs_hedge_qty
+        difference = lp_qty + hedge_qty
         abs_difference = abs(difference)
         percentage_diff = (abs_difference / lp_qty) * 100 if lp_qty > 0 else 0
         # Calculate net/gross ratio: (lp + hedge) / (lp - hedge)
@@ -328,7 +335,7 @@ def check_hedge_rebalance():
         logger.info(f"  Token: {symbol}")
         logger.info(f"  LP Qty Raw: {lp_qty_raw:.4f}, Smoothed: {lp_qty_smoothed:.4f})")
         logger.info(f"  Last Smoothed Qty: {last_smoothing_dict[symbol]:.4f}, last Smoothing Timestamp: {last_smoothing_timestamp}")
-        logger.info(f"  Hedged Qty: {hedge_qty:.4f} (Short: {abs_hedge_qty:.4f})")
+        logger.info(f"  Hedged Qty: {hedge_qty:.4f}")
         logger.info(f"  Difference: {difference:.4f} ({percentage_diff:.2f}%)")
         logger.info(f"  Net/Gross Ratio: {net_gross_ratio:.2f}")
 
