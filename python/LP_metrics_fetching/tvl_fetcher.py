@@ -3,6 +3,9 @@ import os
 from LP_metrics_fetching.geckoTerminalClient import GeckoTerminalClient
 from common.path_config import METEORA_LATEST_CSV, KRYSTAL_LATEST_CSV, ACTIVE_POOLS_TVL
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Chain name mapping to GeckoTerminal's conventions
 CHAIN_MAPPING = {
@@ -28,11 +31,11 @@ def process_lp_positions(csv_files: list, output_csv: str = "active_pools.csv", 
             df = pd.read_csv(csv_file)
             dfs.append(df)
         except Exception as e:
-            print(f"Error reading CSV file {csv_file}: {e}")
+            logger.error(f"Error reading CSV file {csv_file}: {e}")
             continue
 
     if not dfs:
-        print("No valid CSV files provided")
+        logger.warning("No valid CSV files provided")
         return
 
     df = pd.concat(dfs, ignore_index=True)
@@ -40,7 +43,7 @@ def process_lp_positions(csv_files: list, output_csv: str = "active_pools.csv", 
     # Ensure required columns exist
     required_columns = {'Pool Address', 'Chain'}
     if not required_columns.issubset(df.columns):
-        print(f"CSV files must contain {required_columns} columns")
+        logger.warning(f"CSV files must contain {required_columns} columns")
         return
 
     # Extract unique pool addresses and their chains
@@ -49,7 +52,7 @@ def process_lp_positions(csv_files: list, output_csv: str = "active_pools.csv", 
     df = df.dropna(subset=['Chain'])  # Drop rows with unmapped chains
 
     if df.empty:
-        print("No valid pool addresses with mapped chains found")
+        logger.warning("No valid pool addresses with mapped chains found")
         return
 
     # Initialize GeckoTerminal client
@@ -70,7 +73,7 @@ def process_lp_positions(csv_files: list, output_csv: str = "active_pools.csv", 
                 batch_df.to_csv(output_csv, mode='a', header=False, index=False)
             time.sleep(0.2)  # Small delay to avoid hitting rate limits
 
-    print(f"Output saved to {output_csv}")
+    logger.info(f"Output saved to {output_csv}")
 
 if __name__ == "__main__":
     # Example usage with METEORA and KRYSTAL CSVs

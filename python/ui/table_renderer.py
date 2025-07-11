@@ -92,29 +92,24 @@ def render_wallet_positions(dataframes, error_flags):
     pool_metrics_df = None
     try:
         pool_metrics_df = dataframes["Active Pools TVL"]
-        print(f"Loaded pool_metrics_df from dataframes['Active Pools TVL'] with {len(pool_metrics_df)} rows")
-        print(f"Columns in pool_metrics_df: {pool_metrics_df.columns.tolist()}")
-        print(f"Sample pool_metrics_df:\n{pool_metrics_df.head().to_string()}")
+        logger.info(f"Loaded pool_metrics_df from dataframes['Active Pools TVL'] with {len(pool_metrics_df)} rows")
         pool_metrics_df['chain'] = pool_metrics_df['chain'].str.lower()
         pool_metrics_df['pool_address'] = pool_metrics_df['pool_address'].str.lower()
     except KeyError:
-        print("Key 'Active Pools TVL' not found in dataframes. Falling back to loading from ACTIVE_POOLS_TVL")
         try:
             pool_metrics_df = pd.read_csv(ACTIVE_POOLS_TVL)
-            print(f"Loaded pool_metrics_df from {ACTIVE_POOLS_TVL} with {len(pool_metrics_df)} rows")
-            print(f"Columns in pool_metrics_df: {pool_metrics_df.columns.tolist()}")
-            print(f"Sample pool_metrics_df:\n{pool_metrics_df.head().to_string()}")
+            logger.info(f"Loaded pool_metrics_df from {ACTIVE_POOLS_TVL} with {len(pool_metrics_df)} rows")
             pool_metrics_df['chain'] = pool_metrics_df['chain'].str.lower()
             pool_metrics_df['pool_address'] = pool_metrics_df['pool_address'].str.lower()
         except Exception as e:
-            print(f"Error loading active_pools.csv from {ACTIVE_POOLS_TVL}: {e}")
+            logger.warning(f"Error loading active_pools.csv from {ACTIVE_POOLS_TVL}: {e}")
             pool_metrics_df = pd.DataFrame(columns=['chain', 'pool_address', 'tvl_usd', 'volume_24h_usd'])
 
     # Log unique chains in pool_metrics_df
     if not pool_metrics_df.empty:
-        print(f"Unique chains in pool_metrics_df: {pool_metrics_df['chain'].unique().tolist()}")
+        logger.info(f"Unique chains in pool_metrics_df: {pool_metrics_df['chain'].unique().tolist()}")
     else:
-        print("pool_metrics_df is empty")
+        logger.warning("pool_metrics_df is empty")
 
     if "Krystal" in dataframes and not krystal_error:
         krystal_df = dataframes["Krystal"]
@@ -132,19 +127,17 @@ def render_wallet_positions(dataframes, error_flags):
             # Get TVL and volume from active_pools.csv
             pool_address = row["Pool Address"].lower() if isinstance(row["Pool Address"], str) else ""
             chain = CHAIN_MAPPING.get(row["Chain"].lower(), row["Chain"].lower()) if isinstance(row["Chain"], str) else ""
-            print(f"Krystal: Matching pool_address={pool_address}, chain={chain}")
             pool_match = pool_metrics_df[(pool_metrics_df['pool_address'] == pool_address) & (pool_metrics_df['chain'] == chain)]
             if pool_match.empty:
-                print(f"Krystal: No match found for pool_address={pool_address}, chain={chain}")
+                logger.warning(f"Krystal: No match found for pool_address={pool_address}, chain={chain}")
                 tvl = np.nan
                 volume_24h = np.nan
             else:
                 try:
                     tvl = float(pool_match['tvl_usd'].iloc[0])
                     volume_24h = float(pool_match['volume_24h_usd'].iloc[0])
-                    print(f"Krystal: Match found for pool_address={pool_address}, chain={chain}, tvl={tvl}, volume_24h={volume_24h}")
                 except (ValueError, TypeError) as e:
-                    print(f"Krystal: Error converting tvl_usd or volume_24h_usd for pool_address={pool_address}, chain={chain}: {e}")
+                    logger.warning(f"Krystal: Error converting tvl_usd or volume_24h_usd for pool_address={pool_address}, chain={chain}: {e}")
                     tvl = np.nan
                     volume_24h = np.nan
 
@@ -190,19 +183,17 @@ def render_wallet_positions(dataframes, error_flags):
             # Get TVL and volume from active_pools.csv
             pool_address = row["Pool Address"].lower() if isinstance(row["Pool Address"], str) else ""
             chain = CHAIN_MAPPING.get("solana", "solana")  # Meteora is always on Solana
-            print(f"Meteora: Matching pool_address={pool_address}, chain={chain}")
             pool_match = pool_metrics_df[(pool_metrics_df['pool_address'] == pool_address) & (pool_metrics_df['chain'] == chain)]
             if pool_match.empty:
-                print(f"Meteora: No match found for pool_address={pool_address}, chain={chain}")
+                logger.warning(f"Meteora: No match found for pool_address={pool_address}, chain={chain}")
                 tvl = np.nan
                 volume_24h = np.nan
             else:
                 try:
                     tvl = float(pool_match['tvl_usd'].iloc[0])
                     volume_24h = float(pool_match['volume_24h_usd'].iloc[0])
-                    print(f"Meteora: Match found for pool_address={pool_address}, chain={chain}, tvl={tvl}, volume_24h={volume_24h}")
                 except (ValueError, TypeError) as e:
-                    print(f"Meteora: Error converting tvl_usd or volume_24h_usd for pool_address={pool_address}, chain={chain}: {e}")
+                    logger.warning(f"Meteora: Error converting tvl_usd or volume_24h_usd for pool_address={pool_address}, chain={chain}: {e}")
                     tvl = np.nan
                     volume_24h = np.nan
 
@@ -315,19 +306,14 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
     if "Rebalancing" in dataframes or "Hedging" in dataframes:
         token_headers = [
             "Token", "LP Amount USD", "Hedge Amount USD", "LP Qty", 
-            "Net/Gross Ratio (%)", "Suggested Hedge Qty/LP Qty (%)", 
+            "Net/Gross Ratio (%)", "Rebalance Qty/LP Qty (%)", 
             "Action", "Funding Rate (BIPS)"
         ]
         token_data = []
 
         if "Rebalancing" in dataframes:
             rebalancing_df = dataframes["Rebalancing"]
-            token_agg = rebalancing_df.groupby("Token").agg({
-                "LP Qty": "sum",
-                "Hedged Qty": "sum",
-                "Rebalance Value": "sum",
-                "Rebalance Action": "first"
-            }).reset_index()
+            token_agg = rebalancing_df
             
             if "Hedging" in dataframes:
                 hedging_df = dataframes["Hedging"]
@@ -369,11 +355,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 is_auto = auto_hedge_tokens.get(token, False)
 
                 # Calculate Net/Gross Ratio (%) : ((lp_qty + hedge_qty) / (lp_qty - hedge_qty)) * 100
-                net_gross_ratio = (
-                    ((lp_qty + hedged_qty) / (lp_qty - hedged_qty)) * 100
-                    if pd.notna(hedged_qty) and pd.notna(lp_qty) and (lp_qty - hedged_qty) != 0
-                    else np.nan
-                )
+                net_gross_ratio = row["Net/Gross Ratio"] * 100
 
                 # Calculate Suggested Hedge Qty/LP Qty (%)
                 if is_auto:
@@ -387,11 +369,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                         rebalance_value = abs(rebalance_value) if pd.notna(rebalance_value) else np.nan
                     elif action == "sell":
                         rebalance_value = -abs(rebalance_value) if pd.notna(rebalance_value) else np.nan
-                    suggested_hedge_ratio = (
-                        (rebalance_value / lp_qty * 100)
-                        if pd.notna(rebalance_value) and pd.notna(lp_qty) and lp_qty != 0
-                        else np.nan
-                    )
+                    suggested_hedge_ratio = (rebalance_value/hedged_qty) * 100 if pd.notna(hedged_qty) and hedged_qty != 0 else np.nan
 
                 # Error handling for hedging data
                 if hedging_error:
@@ -472,11 +450,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 is_auto = auto_hedge_tokens.get(token, False)
 
                 # Calculate Net/Gross Ratio (%) : ((lp_qty + hedge_qty) / (lp_qty - hedge_qty)) * 100
-                net_gross_ratio = (
-                    ((lp_qty + hedged_qty) / (lp_qty - hedged_qty)) * 100
-                    if pd.notna(hedged_qty) and pd.notna(lp_qty) and (lp_qty - hedged_qty) != 0
-                    else np.nan
-                )
+                net_gross_ratio = row["Net/Gross Ratio"] * 100
                 action = ""
                 rebalance_value = np.nan
                 suggested_hedge_ratio = np.nan
