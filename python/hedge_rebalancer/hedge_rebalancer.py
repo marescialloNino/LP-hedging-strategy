@@ -325,7 +325,8 @@ def check_hedge_rebalance():
 
         difference = lp_qty + hedge_qty
         abs_difference = abs(difference)
-        percentage_diff = (abs_difference / lp_qty) * 100 if lp_qty > 0 else 0
+        gross = lp_qty + abs(hedge_qty)
+        percentage_diff = (abs_difference / gross) * 100 if gross > 0 else 0
         # Calculate net/gross ratio: (lp + hedge) / (lp - hedge)
         net_gross_ratio = (
             (lp_qty + hedge_qty) / (lp_qty - hedge_qty)
