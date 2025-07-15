@@ -306,7 +306,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
     if "Rebalancing" in dataframes or "Hedging" in dataframes:
         token_headers = [
             "Token", "LP Amount USD", "Hedge Amount USD", "LP Qty", 
-            "Net/Gross Ratio (%)", "Rebalance Qty/LP Qty (%)", 
+            "Net/Gross Ratio (%)", "Rebalance Qty (MA)/LP Qty (%)", 
             "Action", "Funding Rate (BIPS)"
         ]
         token_data = []

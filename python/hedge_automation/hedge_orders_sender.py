@@ -43,7 +43,7 @@ class BitgetOrderSender:
     async def _fetch_last_price(self, ticker):
         """Fetch the last closing price for the given ticker"""
         try:
-            symbol, _ = self.broker_handler.symbol_to_market_with_factor(ticker, universal=False)
+            symbol = ticker
             # Wrap the fetch call in a task to ensure there’s an active task context.
             fetch_task = asyncio.create_task(
                 self.broker_handler._end_point_trade._exchange_async.fetch_ohlcv(
@@ -71,17 +71,14 @@ class BitgetOrderSender:
         order_id = str(uuid.uuid4())
         direction_str = 'BUY' if direction > 0 else 'SELL'
 
-        symbol, factor = self.broker_handler.symbol_to_market_with_factor(ticker, universal=False)
-        target_quantity = hedge_qty * factor
+        symbol = ticker
+        target_quantity = hedge_qty 
 
         if price is None:
             price = await self._fetch_last_price(ticker)
             if price is None:
                 self.logger.warning(f"Using full quantity as max_order_size due to missing price")
                 print(f"Warning: Could not fetch price for {ticker}", flush=True)
-
-        if price is not None:
-            price /= factor
 
         qty = self.broker_handler.get_contract_qty_from_coin(ticker, target_quantity)
         self.logger.info(f'Converted {target_quantity} {ticker} to {qty} contracts')
