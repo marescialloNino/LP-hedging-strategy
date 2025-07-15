@@ -305,7 +305,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
     if "Rebalancing" in dataframes or "Hedging" in dataframes:
         token_headers = [
-            "Token", "LP Amount USD", "Hedge Amount USD", "LP Qty", 
+            "Token", "LP Amount USD","LP Smoothed USD", "Hedge Amount USD", "LP Qty", 
             "Net/Gross Ratio (%)", "Rebalance Qty (MA)/LP Qty (%)", 
             "Action", "Funding Rate (BIPS)"
         ]
@@ -339,6 +339,9 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 lp_amount_usd, lp_qty, has_krystal, has_meteora = calculate_token_usd_value(
                     token, krystal_df, meteora_df, use_krystal, use_meteora
                 )
+
+                token_price = lp_amount_usd/lp_qty if pd.notna(lp_qty) and lp_qty != 0 else 0
+                lp_smoothed_amount_usd = row["LP Qty MA"]*token_price if "LP Qty MA" in row else np.nan
 
                 # Adjust lp_qty for factored tokens
                 factor = (
@@ -411,6 +414,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     token,
                     lp_amount_usd,  # Store raw value for sorting
                     f"{lp_amount_usd:.0f}" if pd.notna(lp_amount_usd) else "N/A",
+                    f"{lp_smoothed_amount_usd:.0f}" if pd.notna(lp_smoothed_amount_usd) else "N/A",
                     f"{hedge_amount:.0f}" if pd.notna(hedge_amount) else "N/A",
                     f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
                     f"{net_gross_ratio:.0f}%" if pd.notna(net_gross_ratio) else "N/A",
@@ -434,6 +438,8 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 lp_amount_usd, lp_qty, has_krystal, has_meteora = calculate_token_usd_value(
                     token, krystal_df, meteora_df, use_krystal, use_meteora
                 )
+                token_price = lp_amount_usd/lp_qty if pd.notna(lp_qty) and lp_qty != 0 else 0
+                lp_smoothed_amount_usd = row["LP Qty MA"]*token_price if "LP Qty MA" in row else np.nan
 
                 # Adjust lp_qty for factored tokens
                 factor = (
@@ -475,6 +481,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     token,
                     lp_amount_usd,  # Store raw value for sorting
                     f"{lp_amount_usd:.0f}" if pd.notna(lp_amount_usd) else "N/A",
+                    f"{lp_smoothed_amount_usd:.0f}" if pd.notna(lp_smoothed_amount_usd) else "N/A",
                     f"{hedge_amount:.0f}" if pd.notna(hedge_amount) else "N/A",
                     f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
                     f"{net_gross_ratio:.0f}%" if pd.notna(net_gross_ratio) else "N/A",
