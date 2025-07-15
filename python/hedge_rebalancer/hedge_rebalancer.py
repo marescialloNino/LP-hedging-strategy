@@ -37,9 +37,6 @@ mappings = load_ticker_mappings()
 SYMBOL_MAP = mappings["SYMBOL_MAP"]
 BITGET_TOKENS_WITH_FACTOR_1000 = mappings["BITGET_TOKENS_WITH_FACTOR_1000"]
 BITGET_TOKENS_WITH_FACTOR_10000 = mappings["BITGET_TOKENS_WITH_FACTOR_10000"]
-print("SYMBOL_MAP", SYMBOL_MAP)
-print("BITGET_TOKENS_WITH_FACTOR_1000",BITGET_TOKENS_WITH_FACTOR_1000)
-print("BITGET_TOKENS_WITH_FACTOR_10000",BITGET_TOKENS_WITH_FACTOR_10000)
 
 AUTO_HEDGE_TOKENS_PATH = CONFIG_DIR / "auto_hedge_tokens.json"
 
@@ -196,19 +193,19 @@ def calculate_lp_quantities():
                 for symbol, chains in HEDGABLE_TOKENS.items():
                     if chain in chains:
                         addresses = chains[chain]
-                        logger.info(f"Checking {symbol} for chain={chain}, addresses={addresses}")
+                        logger.debug(f"Checking {symbol} for chain={chain}, addresses={addresses}")
                         factor = (
                             1000 if any(symbol.startswith(factor_symbol) for factor_symbol in BITGET_TOKENS_WITH_FACTOR_1000.values())
                             else 10000 if any(symbol.startswith(factor_symbol) for factor_symbol in BITGET_TOKENS_WITH_FACTOR_10000.values())
                             else 1
                         )
-                        logger.info(f"Factor for {symbol}: {factor}")
+                        logger.debug(f"Factor for {symbol}: {factor}")
                         if token_x in addresses:
                             lp_quantities[symbol] += qty_x / factor
-                            logger.info(f"Matched {symbol} for token_x={token_x}, added {qty_x / factor}, total: {lp_quantities[symbol]}")
+                            logger.debug(f"Matched {symbol} for token_x={token_x}, added {qty_x / factor}, total: {lp_quantities[symbol]}")
                         if token_y in addresses:
                             lp_quantities[symbol] += qty_y / factor
-                            logger.info(f"Matched {symbol} for token_y={token_y}, added {qty_y / factor}, total: {lp_quantities[symbol]}")
+                            logger.debug(f"Matched {symbol} for token_y={token_y}, added {qty_y / factor}, total: {lp_quantities[symbol]}")
         except Exception as e:
             logger.error(f"Error reading {KRYSTAL_LATEST_CSV}: {e}")
     else:
