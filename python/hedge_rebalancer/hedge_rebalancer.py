@@ -321,6 +321,7 @@ def check_hedge_rebalance():
             # continue
 
         difference = lp_qty + hedge_qty
+        raw_abs_difference = abs(lp_qty_raw + hedge_qty)
         abs_difference = abs(difference)
         gross = lp_qty + abs(hedge_qty)
         percentage_diff = (abs_difference / gross) * 100 if gross > 0 else 0
@@ -358,11 +359,11 @@ def check_hedge_rebalance():
             elif lp_qty > 0 and difference != 0:
                 if difference > 0:
                     rebalance_action = "sell"
-                    rebalance_value = abs_difference
+                    rebalance_value = raw_abs_difference
                     logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} ***")
                 else:
                     rebalance_action = "buy"
-                    rebalance_value = abs_difference
+                    rebalance_value = raw_abs_difference
                     logger.warning(f"  *** REBALANCE SIGNAL: {rebalance_action} {rebalance_value:.5f} for {symbol} ***")
             elif lp_qty == 0 and hedge_qty != 0:
                 rebalance_action = "buy"
@@ -422,11 +423,11 @@ def check_hedge_rebalance():
             if difference != 0:
                 if difference > 0:
                     rebalance_action = "sell"
-                    rebalance_value = abs_difference
+                    rebalance_value = raw_abs_difference
                     logger.info(f"  Non-auto-hedge token {symbol}: Suggest {rebalance_action} {rebalance_value:.5f} for manual rebalancing")
                 else:
                     rebalance_action = "buy"
-                    rebalance_value = abs_difference
+                    rebalance_value = raw_abs_difference
                     logger.info(f"  Non-auto-hedge token {symbol}: Suggest {rebalance_action} {rebalance_value:.5f} for manual rebalancing")
                     logger.info(f"  Non-auto-hedge token {symbol}: Suggest {rebalance_action} {rebalance_value:.5f} for manual rebalancing")
             else:
