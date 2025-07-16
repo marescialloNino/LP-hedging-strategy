@@ -22,3 +22,11 @@ krystal_vault_wallet_chain_ids:
   chains:
   - '8453'
   vault_share: 0.88
+- wallet: '0x89736a560fb7c617a8296e4240578738eee6fd1e'
+  chains:
+  - '42161'
+  vault_share: 1.0
+- wallet: '0x7d59b35353e7f31363f43af3971eb120e2ff3b31'
+  chains:
+  - '1'
+  vault_share: 1.0
