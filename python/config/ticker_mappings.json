@@ -1,0 +1,18 @@
+{
+  "SYMBOL_MAP": {
+    "WETH": "ETH",
+    "WBNB": "BNB",
+    "WS": "S",
+    "BROCCOLI": "BROCCOLIF3B",
+    "USDC.E": "USDC",
+    "WPOL": "POL"
+  },
+  "BITGET_TOKENS_WITH_FACTOR_1000": {
+    "XEC": "1000XEC",
+    "BONK": "1000BONK",
+    "SATS": "1000SATS",
+    "RATS": "1000RATS",
+    "CAT": "1000CAT"
+  },
+  "BITGET_TOKENS_WITH_FACTOR_10000": {}
+}

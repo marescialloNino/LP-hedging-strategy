@@ -1,0 +1,239 @@
+{
+  "ARCUSDT": {
+    "solana": [
+      "61V8vBaqAGMpgDQi4JcAwo1dmBGHsyhzodcPqnEVpump"
+    ]
+  },
+  "VIRTUALUSDT": {
+    "solana": [
+      "3iQL8BFS2vE7mww4ehAqQHAsbmRNCrPxizWAT2Zfyr9y"
+    ],
+    "base": [
+      "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b"
+    ]
+  },
+  "AI16ZUSDT": {
+    "solana": [
+      "HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC"
+    ]
+  },
+  "LAUNCHCOINUSDT": {
+    "solana": [
+      "Ey59PH7Z4BFU4HjyKnyMdWt5GGN76KazTAwQihoUXRnk"
+    ]
+  },
+  "SOLUSDT": {
+    "solana": [
+      "So11111111111111111111111111111111111111112"
+    ]
+  },
+  "CRVUSDT": {
+    "arbitrum": [
+      "0x11cdb42b0eb46d95f990bedd4695a6e3fa034978"
+    ],
+    "polygon": [
+      "0x172370d5cd63279efa6d502dab29171933a610af"
+    ]
+  },
+  "LINKUSDT": {
+    "polygon": [
+      "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39"
+    ]
+  },
+  "CAKEUSDT": {
+    "bsc": [
+      "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82"
+    ]
+  },
+  "GMXUSDT": {
+    "arbitrum": [
+      "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a"
+    ]
+  },
+  "KAITOUSDT": {
+    "base": [
+      "0x98d0baa52b2d063e780de12f615f963fe8537553"
+    ]
+  },
+  "TOSHIUSDT": {
+    "base": [
+      "0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4"
+    ]
+  },
+  "PENDLEUSDT": {
+    "arbitrum": [
+      "0x0c880f6761f1af8d9aa9c466984b80dab9a8c9e8"
+    ]
+  },
+  "PEPEUSDT": {
+    "bsc": [
+      "0x25d887ce7a35172c62febfd67a1856f20faebb00"
+    ]
+  },
+  "VVVUSDT": {
+    "base": [
+      "0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf"
+    ]
+  },
+  "PENGUUSDT": {
+    "base": [
+      "0x01e6bd233f7021e4f5698a3ae44242b76a246c0a"
+    ]
+  },
+  "ZROUSDT": {
+    "arbitrum": [
+      "0x6985884c4392d348587b19cb9eaaf157f13271cd"
+    ],
+    "polygon": [
+      "0x6985884c4392d348587b19cb9eaaf157f13271cd"
+    ]
+  },
+  "ARBUSDT": {
+    "arbitrum": [
+      "0x912ce59144191c1204e64559fe8253a0e49e6548"
+    ]
+  },
+  "AIXBTUSDT": {
+    "base": [
+      "0x4f9fd6be4a90f2620860d680c0d4d5fb53d1a825"
+    ]
+  },
+  "POLUSDT": {
+    "polygon": [
+      "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270"
+    ]
+  },
+  "BNBUSDT": {
+    "bsc": [
+      "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+    ]
+  },
+  "ETHUSDT": {
+    "arbitrum": [
+      "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
+    ],
+    "polygon": [
+      "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619"
+    ],
+    "base": [
+      "0x4200000000000000000000000000000000000006"
+    ],
+    "sonic": [
+      "0x50c42deacd8fc9773493ed674b675be577f2634b"
+    ]
+  },
+  "1000BONKUSDT": {
+    "solana": [
+      "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+    ],
+    "polygon": [
+      "0xe5b49820e5a1063f6f4ddf851327b5e8b2301048"
+    ]
+  },
+  "SONICUSDT": {
+    "sonic": [
+      "0x039e2fb66102314ce7b64ce5ce3e5183bc94ad38"
+    ]
+  },
+  "HUMAUSDT": {
+    "solana": [
+      "HUMA1821qVDKta3u2ovmfDQeW2fSQouSKE8fkF44wvGw"
+    ]
+  },
+  "ZBCNUSDT": {
+    "solana": [
+      "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+    ]
+  },
+  "SOONUSDT": {
+    "solana": [
+      "4eDf52YYzL6i6gbZ6FXqrLUPXbtP61f1gPSFM66M4XHe"
+    ]
+  },
+  "RWAUSDT": {
+    "bsc": [
+      "0x9c8b5ca345247396bdfac0395638ca9045c6586e"
+    ]
+  },
+  "AAVEUSDT": {
+    "polygon": [
+      "0xd6df932a45c0f255f85145f286ea0b292b21c90b"
+    ]
+  },
+  "UNIUSDT": {
+    "polygon": [
+      "0xb33eaad8d922b1083446dc23f610c2567fb5180f"
+    ],
+    "base": [
+      "0xc3de830ea07524a0761646a6a4e4be0e114a3c83"
+    ]
+  },
+  "SANDUSDT": {
+    "polygon": [
+      "0xbbba073c31bf03b8acf7c28ef0738decf3695683"
+    ]
+  },
+  "GMTUSDT": {
+    "polygon": [
+      "0x714db550b574b3e927af3d93e26127d15721d4c2"
+    ]
+  },
+  "FARTCOINUSDT": {
+    "solana": [
+      "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump"
+    ],
+    "base": [
+      "0x2f6c17fa9f9bc3600346ab4e48c0701e1d5962ae"
+    ]
+  },
+  "POPCATUSDT": {
+    "solana": [
+      "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr"
+    ]
+  },
+  "SPXUSDT": {
+    "base": [
+      "0x50da645f148798f68ef2d7db7c1cb22a6819bb2c"
+    ]
+  },
+  "DEGENUSDT": {
+    "base": [
+      "0x4ed4e862860bed51a9570b96d89af5e1b0efefed"
+    ]
+  },
+  "BRETTUSDT": {
+    "base": [
+      "0x532f27101965dd16442e59d40670faf5ebb142e4"
+    ]
+  },
+  "PROMPTUSDT": {
+    "base": [
+      "0x30c7235866872213f68cb1f08c37cb9eccb93452"
+    ]
+  },
+  "HOUSEUSDT": {
+    "solana": [
+      "DitHyRMQiSDhn5cnKMJV2CDDt6sVct96YrECiM49pump"
+    ]
+  },
+  "GRIFFAINUSDT": {
+    "solana": [
+      "KENJSUYLASHUMfHyy5o4Hp2FdNqZg1AsUPhfH2kYvEP"
+    ]
+  },
+  "REIUSDT": {
+    "base": [
+      "0x6b2504a03ca4d43d0d73776f6ad46dab2f2a4cfd"
+    ]
+  },
+  "VELOUSDT": {
+    "bsc": [
+      "0xf486ad071f3bee968384d2e39e2d8af0fcf6fd46"
+    ]
+  },
+  "PUMPUSDT": {
+    "solana": [
+      "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn"
+    ]
+  }
+}
