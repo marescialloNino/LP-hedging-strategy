@@ -2,6 +2,8 @@ rpc_endpoint: https://rpc-proxy.segfaultx0.workers.dev
 solana_wallet_addresses:
 - Yj7SzJwGkHuUKBfFytp8TPfj997ntSicCCuJLiB39kE
 - 4Qmf2vs3CS93xQgyfNbaPv5KqY7rqWJ1njyJpHHKSY1P
+- 2Le8znEid4DeKY1CoUjvCz7Rn85z21N7TNgzmpNxePFE
+- 2E5zCFQB8EhsVESZ7GpZMS83eJAjh7VraacHwC8iiZbV
 evm_wallet_addresses:
 - '0xc42de00a218ce8c02506f09448e8b92a430f8f71'
 - '0x439f3e3aeb991155923b2e9d79b40169c38238c6'
