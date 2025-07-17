@@ -1,77 +1,181 @@
-// src/index.ts
 import { config } from './config';
 import { retrieveMeteoraPositions } from './services/meteoraPositionService';
-import { retrieveKrystalPositions } from './services/krystalPositionService';
-import { generateMeteoraCSV, generateLiquidityProfileCSV , generateKrystalCSV, writeMeteoraLatestCSV, writeKrystalLatestCSV } from './services/csvService';
-import { processPnlForPositions, savePnlResultsCsv } from './services/pnlResultsService';
-import { logger } from './utils/logger'; // Import logger from utils/logger
+import { retrieveKrystalPositions, retrieveKrystalVaultPositions } from './services/krystalPositionService';
+import { generateMeteoraCSV, generateKrystalCSV, writeMeteoraLatestCSV, writeKrystalLatestCSV } from './services/csvService';
+import { logger } from './utils/logger';
 import path from 'path';
 import fs from 'fs';
+import fsPromises from 'fs/promises';
 
 // Get data directory from environment or use default with absolute path
-const dataDir = process.env.LP_HEDGE_DATA_DIR || path.join(process.cwd(), '../lp-data');
+const logDir = process.env.LP_HEDGE_LOG_DIR || path.join(process.cwd(), '../logs');
+const ERROR_FLAGS_PATH = path.join(logDir, 'lp_fetching_errors.json');
 
-// Create data directory if it doesn't exist (using sync functions for startup)
-try {
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-} catch (error) {
-  console.error('Error creating data directory:', error);
+interface ErrorFlags {
+  LP_FETCHING_METEORA_ERROR: boolean;
+  meteora_error_message: string;
+  last_meteora_lp_update: string;
+  LP_FETCHING_KRYSTAL_ERROR: boolean;
+  krystal_error_message: string;
+  last_krystal_lp_update: string;
+  LP_FETCHING_VAULT_ERROR: boolean;
+  vault_error_message: string;
+  last_vault_lp_update: string;
 }
 
-// Add uncaught exception and unhandled rejection handlers
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception:', { error: error.message, stack: error.stack });
-  process.exit(1);
-});
+// Utility function for retrying async operations
+async function retryOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 1,
+  delayMs: number = 30000
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt <= maxRetries) {
+        logger.warn(`Attempt ${attempt} failed: ${String(error)}. Retrying in ${delayMs / 1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else {
+        logger.error(`All ${maxRetries + 1} attempts failed. Giving up.`);
+        throw error;
+      }
+    }
+  }
+  throw lastError; // This line should never be reached due to the throw in the loop
+}
 
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection:', { reason, promise });
-  process.exit(1);
-});
+// Read existing error flags to preserve timestamps and messages
+async function readErrorFlags(): Promise<ErrorFlags> {
+  try {
+    if (fs.existsSync(ERROR_FLAGS_PATH)) {
+      const data = await fsPromises.readFile(ERROR_FLAGS_PATH, 'utf-8');
+      const parsed = JSON.parse(data);
+      // Migrate from old LP_positions_last_updated if present
+      const lastUpdate = parsed.LP_positions_last_updated || '';
+      return {
+        LP_FETCHING_KRYSTAL_ERROR: parsed.LP_FETCHING_KRYSTAL_ERROR || false,
+        LP_FETCHING_METEORA_ERROR: parsed.LP_FETCHING_METEORA_ERROR || false,
+        LP_FETCHING_VAULT_ERROR: parsed.LP_FETCHING_KRYSTAL_ERROR || false,
+        last_meteora_lp_update: parsed.last_meteora_lp_update || lastUpdate,
+        last_krystal_lp_update: parsed.last_krystal_lp_update || lastUpdate,
+        last_vault_lp_update: parsed.last_krystal_lp_update || lastUpdate,
+        krystal_error_message: parsed.krystal_error_message || '',
+        meteora_error_message: parsed.meteora_error_message || '',
+        vault_error_message: parsed.meteora_error_message || '',
+      };
+    }
+  } catch (error) {
+    logger.error(`Error reading error flags: ${String(error)}`);
+  }
+  // Return default flags if file doesn't exist or read fails
+  return {
+    LP_FETCHING_KRYSTAL_ERROR: false,
+    LP_FETCHING_METEORA_ERROR: false,
+    LP_FETCHING_VAULT_ERROR: false,
+    last_meteora_lp_update: '',
+    last_krystal_lp_update: '',
+    last_vault_lp_update: '',
+    krystal_error_message: '',
+    meteora_error_message: '',
+    vault_error_message: '',
+  };
+}
+
+// Write error flags
+async function updateErrorFlags(flags: ErrorFlags) {
+  try {
+    await fsPromises.writeFile(ERROR_FLAGS_PATH, JSON.stringify(flags, null, 2));
+    logger.debug(`Updated error flags: ${JSON.stringify(flags)}`);
+  } catch (error) {
+    logger.error(`Error writing error flags: ${String(error)}`);
+  }
+}
 
 async function processSolanaWallet(walletAddress: string): Promise<any[]> {
   logger.info(`Processing Solana wallet: ${walletAddress}`);
-  const meteoraPositions = await retrieveMeteoraPositions(walletAddress);
-  if (meteoraPositions.length > 0) {
-    const records = await generateMeteoraCSV(walletAddress, meteoraPositions);
-    console.log(records)
-    return records; 
-  } else {
-    logger.info(`No Meteora positions found for ${walletAddress}`);
-    return [];
+  try {
+    const meteoraPositions = await retryOperation(() => retrieveMeteoraPositions(walletAddress));
+    if (meteoraPositions.length > 0) {
+      const records = await generateMeteoraCSV(walletAddress, meteoraPositions);
+      return records;
+    } else {
+      logger.info(`No Meteora positions found for ${walletAddress}`);
+      return [];
+    }
+  } catch (error) {
+    throw error; // Rethrow to ensure main() catches it
   }
 }
 
 async function processEvmWallet(walletAddress: string): Promise<any[]> {
   logger.info(`Processing EVM wallet: ${walletAddress}`);
-  const krystalPositions = await retrieveKrystalPositions(walletAddress);
-  if (krystalPositions.length > 0) {
-    const records = await generateKrystalCSV(walletAddress, krystalPositions);
-    return records;
-  } else {
-    logger.info(`No Krystal positions found for ${walletAddress}`);
-    return [];
+  const chainIds = config.KRYSTAL_CHAIN_IDS.join(',');
+  try {
+    const krystalPositions = await retryOperation(() => retrieveKrystalPositions(walletAddress, chainIds));
+    if (krystalPositions.length > 0) {
+      const records = await generateKrystalCSV(walletAddress, krystalPositions);
+      return records;
+    } else {
+      logger.info(`No Krystal positions found for ${walletAddress} on chains ${chainIds}`);
+      return [];
+    }
+  } catch (error) {
+    throw error; // Rethrow to ensure main() catches it
+  }
+}
+
+async function processEvmVaultWallet(walletAddress: string, chainIds: string[], vaultShare: number): Promise<any[]> {
+  logger.info(`Processing EVM vault wallet: ${walletAddress} on chain: ${chainIds.join(',')}`);
+  const chainIdsStr = chainIds.join(',');
+  try {
+    const krystalPositions = await retryOperation(() =>
+      retrieveKrystalVaultPositions(walletAddress, chainIdsStr, vaultShare)
+    );
+    if (krystalPositions.length > 0) {
+      const records = await generateKrystalCSV(walletAddress, krystalPositions);
+      return records;
+    } else {
+      logger.info(`No Krystal positions found for vault wallet ${walletAddress} on chains ${chainIdsStr}`);
+      return [];
+    }
+  } catch (error) {
+    throw error; // Rethrow to ensure main() catches it
   }
 }
 
 async function main() {
   logger.info('Starting lp-monitor batch process...');
 
+  // Load existing error flags to preserve timestamps and messages
+  let errorFlags: ErrorFlags = await readErrorFlags();
+
   // Accumulate records for latest CSVs
   let allMeteoraRecords: any[] = [];
   let allKrystalRecords: any[] = [];
+  let meteoraSuccess = true;
+  let krystalSuccess = true;
+  let vaultSuccess = true;
+  let meteoraErrorMessage = '';
+  let krystalErrorMessage = '';
+  let vaultErrorMessage = '';
 
   // Process Solana wallets (Meteora positions)
   for (const solWallet of config.SOLANA_WALLET_ADDRESSES) {
-    const meteoraRecords = await processSolanaWallet(solWallet);
-    allMeteoraRecords = allMeteoraRecords.concat(meteoraRecords);
+    try {
+      const meteoraRecords = await processSolanaWallet(solWallet);
+      allMeteoraRecords = allMeteoraRecords.concat(meteoraRecords);
+    } catch (error) {
+      const errorMsg = `Failed to process Solana wallet ${solWallet}: ${String(error)}`;
+      logger.error(errorMsg);
+      meteoraSuccess = false;
+      meteoraErrorMessage += (meteoraErrorMessage ? '; ' : '') + errorMsg;
+    }
   }
 
-  console.log(allMeteoraRecords)
-
-  // Write all Meteora latest positions
+  // Write Meteora latest positions
   if (allMeteoraRecords.length > 0) {
     await writeMeteoraLatestCSV(allMeteoraRecords);
     logger.info(`Wrote ${allMeteoraRecords.length} Meteora positions to latest CSV`);
@@ -79,13 +183,46 @@ async function main() {
     logger.info('No Meteora positions found across all wallets');
   }
 
-  // Process EVM wallets (Krystal positions)
-  for (const evmWallet of config.EVM_WALLET_ADDRESSES) {
-    const krystalRecords = await processEvmWallet(evmWallet);
-    allKrystalRecords = allKrystalRecords.concat(krystalRecords);
+  // Update Meteora error flag and timestamp
+  errorFlags.LP_FETCHING_METEORA_ERROR = !meteoraSuccess;
+  errorFlags.meteora_error_message = meteoraSuccess ? '' : meteoraErrorMessage;
+  if (meteoraSuccess && allMeteoraRecords.length > 0) {
+    errorFlags.last_meteora_lp_update = new Date().toISOString();
   }
 
-  // Write all Krystal latest positions
+  // Process normal EVM wallets (Krystal positions)
+  for (const evmWallet of config.EVM_WALLET_ADDRESSES) {
+    // Skip if wallet is a vault wallet to avoid duplicate processing
+    if (Object.keys(config.KRYSTAL_VAULT_WALLET_CHAIN_MAP).includes(evmWallet)) {
+      logger.warn(`Skipping wallet ${evmWallet} in normal processing as it is a vault wallet`);
+      continue;
+    }
+    try {
+      const krystalRecords = await processEvmWallet(evmWallet);
+      allKrystalRecords = allKrystalRecords.concat(krystalRecords);
+    } catch (error) {
+      const errorMsg = `Failed to process EVM wallet ${evmWallet}: ${String(error)}`;
+      logger.error(errorMsg);
+      krystalSuccess = false;
+      krystalErrorMessage += (krystalErrorMessage ? '; ' : '') + errorMsg;
+    }
+  }
+
+  // Process vault EVM wallets (Krystal positions)
+  for (const [vaultWallet, entry] of Object.entries(config.KRYSTAL_VAULT_WALLET_CHAIN_MAP) as [string, { chains: string[]; vaultShare: number }][]) {
+    try {
+      const { chains, vaultShare } = entry;
+      const krystalRecords = await processEvmVaultWallet(vaultWallet, chains, vaultShare);
+      allKrystalRecords = allKrystalRecords.concat(krystalRecords);
+    } catch (error) {
+      const errorMsg = `Failed to process vault wallet ${vaultWallet}: ${String(error)}`;
+      logger.error(errorMsg);
+      vaultSuccess = false;
+      vaultErrorMessage += (vaultErrorMessage ? '; ' : '') + errorMsg;
+    }
+  }
+
+  // Write Krystal latest positions
   if (allKrystalRecords.length > 0) {
     await writeKrystalLatestCSV(allKrystalRecords);
     logger.info(`Wrote ${allKrystalRecords.length} Krystal positions to latest CSV`);
@@ -93,29 +230,22 @@ async function main() {
     logger.info('No Krystal positions found across all wallets');
   }
 
-  // Write combined liquidity profile for all Meteora positions
-  if (allMeteoraRecords.length > 0) {
-    const allMeteoraPositions = await retrieveMeteoraPositions(config.SOLANA_WALLET_ADDRESSES.join(',')); // Adjust if needed
-    await generateLiquidityProfileCSV('all_wallets', allMeteoraPositions);
-  } else {
-    logger.info('No Meteora positions found across all wallets for liquidity profile');
+  // Update Krystal error flag and timestamp
+  errorFlags.LP_FETCHING_KRYSTAL_ERROR = !krystalSuccess;
+  errorFlags.krystal_error_message = krystalSuccess ? '' : krystalErrorMessage;
+  if (krystalSuccess && allKrystalRecords.length > 0) {
+    errorFlags.last_krystal_lp_update = new Date().toISOString();
   }
 
-  // --- NEW: Calculate PnL for all Meteora positions and save to CSV ---
-  if (allMeteoraRecords.length > 0) {
-    // Retrieve full positions (including amounts, prices, symbols, etc.) for PnL calculation.
-    const pnlPositions = await retrieveMeteoraPositions(config.SOLANA_WALLET_ADDRESSES.join(','));
-    if (pnlPositions.length > 0) {
-      const pnlResults = await processPnlForPositions(pnlPositions);
-      await savePnlResultsCsv(pnlResults);
-      logger.info(`Calculated and saved PnL results for ${pnlResults.length} Meteora positions.`);
-    } else {
-      logger.info('No Meteora positions available for PnL calculation.');
-    }
-  } else {
-    logger.info('No Meteora records available for PnL calculation.');
+  // Update vault error flag and timestamp
+  errorFlags.LP_FETCHING_VAULT_ERROR = !vaultSuccess;
+  errorFlags.vault_error_message = vaultSuccess ? '' : vaultErrorMessage;
+  if (vaultSuccess && allKrystalRecords.length > 0) {
+    errorFlags.last_vault_lp_update = new Date().toISOString();
   }
-  // ---------------------------------------------------------------------
+
+  // Write updated error flags
+  await updateErrorFlags(errorFlags);
 
   logger.info('Batch process completed.');
 }

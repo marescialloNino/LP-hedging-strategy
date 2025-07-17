@@ -1,15 +1,24 @@
+.env
 node_modules
 /logs
 /lp-data
+*.bat
+web_broker.py
+
+/kamino-positions
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 *.csv
-.env
+*.json
+
 .ipynb
 # C extensions
 *.so
+*.sh
+
+
 
 # Distribution / packaging
 .Python

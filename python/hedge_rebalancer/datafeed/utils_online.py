@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 import json
@@ -6,6 +7,17 @@ from datetime import datetime, timedelta, date
 import calendar
 
 BASKET_LABEL_SEPARATOR = '__'
+
+
+@dataclass
+class Aum:
+    free: float = 0.0
+    total: float = 0.0
+    equity: float = 0.0
+
+    def __str__(self):
+        return f'{self.free};{self.total};{self.equity}'
+
 
 
 def print_to_string(*args, **kwargs):
@@ -140,12 +152,13 @@ def extract_coin(symbol):
 def extract_coin_with_factor(symbol):
     symbol = extract_coin(symbol)
     factor = 1
-    if '10000' in symbol:
-        symbol = symbol.replace('10000', '')
-        factor = 10000
-    elif '1000' in symbol:
-        symbol = symbol.replace('1000', '')
-        factor = 1000
+
+    # if '10000' in symbol:
+    #     symbol = symbol.replace('10000', '')
+    #     factor = 10000
+    # elif '1000' in symbol:
+    #     symbol = symbol.replace('1000', '')
+    #     factor = 1000
     return symbol, factor
 
 
@@ -187,6 +200,8 @@ def build_symbol(coin, market, perp=False, factor=True, to_quote=False, universa
         return symbol, 1
 
     factor = 1
+
+    """
     if market == 'binancefut' or market == 'bybit' or market == 'bitget':
         if 'SHIB' in symbol:
             if market == 'bybit':
@@ -197,9 +212,9 @@ def build_symbol(coin, market, perp=False, factor=True, to_quote=False, universa
 
         else:
             sym_list = {
-                'binancefut': ['PEPE', 'SATS', 'LUNC', 'XEC', 'BONK', 'FLOKI', 'CAT', 'RATS', 'WHY', 'X'],
+                'binancefut': ['PEPE', 'SATS', 'LUNC', 'XEC', 'BONK', 'FLOKI', 'CAT', 'RATS', 'WHY'],
                 'bybit': ['PEPE', 'SATS', 'LUNC', 'XEC', 'BONK', 'FLOKI'],
-                'bitget': []
+                'bitget': ['XEC', 'BONK', 'SATS', 'RATS', 'CAT']
             }
 
             for name in sym_list.get(market, []):
@@ -207,6 +222,7 @@ def build_symbol(coin, market, perp=False, factor=True, to_quote=False, universa
                     symbol = symbol.replace(name, '1000' + name)
                     factor = 1e-3
                     break
+        """
     return symbol, factor
 
 

@@ -1,15 +1,10 @@
-// src/services/krystalPositionService.ts
-import { fetchKrystalPositions } from '../dexes/krystalAdapter';
+import { fetchKrystalPositions, fetchKrystalVaultPositions } from '../dexes/krystalAdapter';
 import { KrystalPositionInfo } from './types';
-import { config } from '../config';
-import { logger } from '../utils/logger'; // Import logger from utils/logger
+import { logger } from '../utils/logger';
 
-export async function retrieveKrystalPositions(walletAddress: string): Promise<KrystalPositionInfo[]> {
+export async function retrieveKrystalPositions(walletAddress: string, chainIds: string): Promise<KrystalPositionInfo[]> {
   try {
-    // Use chain IDs from config
-    const chainIds = config.KRYSTAL_CHAIN_IDS.join(',');
     logger.info(`Fetching Krystal positions for wallet ${walletAddress} on chains: ${chainIds}`);
-
     const positions = await fetchKrystalPositions(walletAddress, chainIds);
     if (positions.length === 0) {
       logger.info(`No Krystal positions found for wallet ${walletAddress} on chains ${chainIds}`);
@@ -18,7 +13,21 @@ export async function retrieveKrystalPositions(walletAddress: string): Promise<K
     }
     return positions;
   } catch (error) {
-    logger.error(`Error fetching Krystal positions for wallet ${walletAddress}: ${error}`);
-    return [];
+    throw error; // Rethrow to propagate to index.ts
+  }
+}
+
+export async function retrieveKrystalVaultPositions(walletAddress: string, chainIds: string, vaultShare: number): Promise<KrystalPositionInfo[]> {
+  try {
+    logger.info(`Fetching Krystal Vault positions for wallet ${walletAddress} on chains: ${chainIds}`);
+    const positions = await fetchKrystalVaultPositions(walletAddress, vaultShare, chainIds);
+    if (positions.length === 0) {
+      logger.info(`No Krystal Vault positions found for wallet ${walletAddress} on chains ${chainIds}`);
+    } else {
+      logger.info(`Retrieved ${positions.length} Krystal Vault positions for wallet ${walletAddress}`);
+    }
+    return positions;
+  } catch (error) {
+    throw error; // Rethrow to propagate to index.ts
   }
 }

@@ -1,0 +1,16 @@
+# Configuration file for Python modules 
+
+hedge_rebalancer:
+  # Triggers for initiating rebalancing actions
+  triggers:
+    # Positive trigger: underhedged pctg
+    positive: 0.3
+    # Negative trigger: overhedged pctg
+    negative: -0.3
+    # minimum value to trigger a rebalance
+    min_usd: 200
+  smoother:
+    use_smoothed_qty: true
+    smoothing_lookback_h: 24
+hedge_monitoring:
+  funding_rate_alert_threshold: -20 # in bips

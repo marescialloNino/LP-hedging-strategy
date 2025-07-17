@@ -70,6 +70,7 @@ async function saveMeteoraPositionsToCsv(positions: PositionInfo[]): Promise<voi
     header: [
       { id: 'timestamp', title: 'Timestamp' },
       { id: 'owner', title: 'Wallet Address' },
+      { id: 'chain', title: 'Chain' },
       { id: 'id', title: 'Position Key' },
       { id: 'pool', title: 'Pool Address' },
       { id: 'tokenXSymbol', title: 'Token X Symbol' },
@@ -166,7 +167,7 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
       return [];
     }
 
-    const tokenMappings = new Map<string, { symbol: string; coingeckoId: string }>();
+    const tokenMappings = new Map<string, { symbol: string; coingeckoId: string; decimals: number }>();
     const positionInfos: PositionInfo[] = [];
 
     for (const [positionKey, pos] of positionsData) {
@@ -191,6 +192,30 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
           const tokenXAddress = pos.tokenX?.publicKey?.toString() || pos.tokenX?.mint?.toString() || 'unknown';
           const tokenYAddress = pos.tokenY?.publicKey?.toString() || pos.tokenY?.mint?.toString() || 'unknown';
 
+          async function isValidPublicKey(address: string): Promise<boolean> {
+            try {
+              if (address === 'unknown') {
+                await logToFile(logFilePath, `Invalid address: ${address} (unknown)`);
+                return false;
+              }
+              const publicKey = new PublicKey(address);
+              const isOnCurve = PublicKey.isOnCurve(publicKey);
+              if (!isOnCurve) {
+                await logToFile(logFilePath, `Invalid address: ${address} (not on curve)`);
+              }
+              return isOnCurve;
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              await logToFile(logFilePath, `Error checking public key ${address}: ${errorMessage}`);
+              return false;
+            }
+          }
+
+          if (!(await isValidPublicKey(tokenXAddress)) || !(await isValidPublicKey(tokenYAddress))) {
+            await logToFile(logFilePath, `Skipping position ${positionKey} due to invalid token mints: tokenX=${tokenXAddress}, tokenY=${tokenYAddress}`);
+            continue;
+          }
+
           let tokenXMapping = tokenMappings.get(tokenXAddress);
           let tokenYMapping = tokenMappings.get(tokenYAddress);
           if (!tokenXMapping) {
@@ -202,15 +227,24 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
             tokenMappings.set(tokenYAddress, tokenYMapping);
           }
 
-          const tokenXDecimals = pos.tokenX?.decimal || 0;
-          const tokenYDecimals = pos.tokenY?.decimal || 0;
+          const tokenXDecimals = tokenXMapping.decimals || 0;
+          const tokenYDecimals = tokenYMapping.decimals || 0;
+
+          if (tokenXDecimals === 0 || tokenYDecimals === 0) {
+            await logToFile(logFilePath, `Warning: Missing decimals for tokens: tokenX=${tokenXAddress} (${tokenXDecimals}), tokenY=${tokenYAddress} (${tokenYDecimals})`);
+          }
 
           const rawFeeX = positionData.feeX;
           const rawFeeY = positionData.feeY;
           const feeX = rawFeeX instanceof BN ? rawFeeX.toNumber() : 0;
           const feeY = rawFeeY instanceof BN ? rawFeeY.toNumber() : 0;
-          const scaledFeeX = feeX / Math.pow(10, tokenXDecimals);
-          const scaledFeeY = feeY / Math.pow(10, tokenYDecimals);
+          const scaledFeeX = tokenXDecimals > 0 ? feeX / Math.pow(10, tokenXDecimals) : feeX;
+          const scaledFeeY = tokenYDecimals > 0 ? feeY / Math.pow(10, tokenYDecimals) : feeY;
+
+          const rawAmountX = positionData.totalXAmount instanceof BN ? positionData.totalXAmount.toNumber() : parseFloat(positionData.totalXAmount) || 0;
+          const rawAmountY = positionData.totalYAmount instanceof BN ? positionData.totalYAmount.toNumber() : parseFloat(positionData.totalYAmount) || 0;
+          const scaledAmountX = tokenXDecimals > 0 ? rawAmountX / Math.pow(10, tokenXDecimals) : rawAmountX;
+          const scaledAmountY = tokenYDecimals > 0 ? rawAmountY / Math.pow(10, tokenYDecimals) : rawAmountY;
 
           const liquidityProfile: LiquidityProfileEntry[] = positionData.positionBinData?.map((bin: any) => {
             const binLiq = parseFloat(bin.binLiquidity) || 0;
@@ -233,6 +267,7 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
           const position: PositionInfo = {
             id: positionPubKey,
             owner: walletAddress,
+            chain: 'solana',
             pool: positionKey,
             tokenX: tokenXAddress,
             tokenY: tokenYAddress,
@@ -240,12 +275,8 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
             tokenYSymbol: tokenYMapping.symbol,
             tokenXDecimals,
             tokenYDecimals,
-            amountX: positionData.totalXAmount
-              ? (parseFloat(positionData.totalXAmount) / Math.pow(10, tokenXDecimals)).toString()
-              : '0',
-            amountY: positionData.totalYAmount
-              ? (parseFloat(positionData.totalYAmount) / Math.pow(10, tokenYDecimals)).toString()
-              : '0',
+            amountX: scaledAmountX.toString(),
+            amountY: scaledAmountY.toString(),
             lowerBinId: lowerBin?.price ? parseFloat(lowerBin.price) : 0,
             upperBinId: upperBin?.price ? parseFloat(upperBin.price) : 0,
             activeBinId: pos.lbPair?.activeId ?? 0,
@@ -268,7 +299,6 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
       }
     }
 
-    // Fetch current token prices
     const coingeckoIds = Array.from(tokenMappings.values()).map(m => m.coingeckoId);
     const priceMap = await getTokenPrices(coingeckoIds);
     for (const pos of positionInfos) {
@@ -277,7 +307,7 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
       pos.tokenXPriceUsd = priceMap.get(tokenXMapping.coingeckoId) || 0;
       pos.tokenYPriceUsd = priceMap.get(tokenYMapping.coingeckoId) || 0;
     }
-    // Update open/closed positions
+
     await updatePositionTracking(positionInfos);
 
     await logToFile(logFilePath, 'All processed positions with prices:\n' + util.inspect(positionInfos, { depth: null }));
@@ -286,6 +316,6 @@ export async function fetchMeteoraPositions(walletAddress: string): Promise<Posi
   } catch (error) {
     await logToFile(logFilePath, `Error fetching Meteora positions: ${error}`);
     console.error('Error fetching Meteora positions:', error);
-    return [];
+    throw error;
   }
 }
