@@ -11,6 +11,6 @@ hedge_rebalancer:
     min_usd: 200
   smoother:
     use_smoothed_qty: true
-    smoothing_lookback_h: 24
+    smoothing_lookback_h: 36
 hedge_monitoring:
   funding_rate_alert_threshold: -20 # in bips
