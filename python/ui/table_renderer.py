@@ -340,9 +340,6 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     token, krystal_df, meteora_df, use_krystal, use_meteora
                 )
 
-                token_price = lp_amount_usd/lp_qty if pd.notna(lp_qty) and lp_qty != 0 else 0
-                lp_smoothed_amount_usd = row["LP Qty MA"]*token_price if "LP Qty MA" in row else np.nan
-
                 # Adjust lp_qty for factored tokens
                 factor = (
                     1000 if any(token.startswith(factor_symbol) for factor_symbol in BITGET_TOKENS_WITH_FACTOR_1000.values())
@@ -351,6 +348,10 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 )
                 if pd.notna(lp_qty):
                     lp_qty = lp_qty / factor
+
+                lp_qty_smoothed = row["LP Qty MA"] if "LP Qty MA" in row else np.nan
+                token_price = lp_amount_usd/lp_qty if pd.notna(lp_qty) and lp_qty != 0 else 0
+                lp_smoothed_amount_usd = row["LP Qty MA"]*token_price if "LP Qty MA" in row else np.nan
 
                 hedged_qty = row["quantity"]
                 hedge_amount = row["amount"]
@@ -438,8 +439,6 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 lp_amount_usd, lp_qty, has_krystal, has_meteora = calculate_token_usd_value(
                     token, krystal_df, meteora_df, use_krystal, use_meteora
                 )
-                token_price = lp_amount_usd/lp_qty if pd.notna(lp_qty) and lp_qty != 0 else 0
-                lp_smoothed_amount_usd = row["LP Qty MA"]*token_price if "LP Qty MA" in row else np.nan
 
                 # Adjust lp_qty for factored tokens
                 factor = (
@@ -449,6 +448,11 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 )
                 if pd.notna(lp_qty):
                     lp_qty = lp_qty / factor
+
+
+                lp_qty_smoothed = row["LP Qty MA"]
+                token_price = lp_amount_usd/lp_qty if pd.notna(lp_qty) and lp_qty != 0 else 0
+                lp_smoothed_amount_usd = lp_qty_smoothed*token_price if "LP Qty MA" in row else np.nan
 
                 hedged_qty = row["quantity"]
                 hedge_amount = row["amount"]

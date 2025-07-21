@@ -4,7 +4,7 @@ node_modules
 /lp-data
 *.bat
 web_broker.py
-
+*.json
 /kamino-positions
 # Byte-compiled / optimized / DLL files
 __pycache__/
