@@ -330,12 +330,17 @@ def check_hedge_rebalance():
             if (lp_qty_raw - hedge_qty) != 0 else float('inf')
         )
 
+        net_gross_ratio_ma = (
+            (lp_qty_smoothed + hedge_qty) / (lp_qty_smoothed - hedge_qty)
+            if (lp_qty_smoothed - hedge_qty) != 0 else float('inf')
+        )
+
         logger.info(f"  Token: {symbol}")
         logger.info(f"  LP Qty Raw: {lp_qty_raw:.4f}, Smoothed: {lp_qty_smoothed:.4f})")
         logger.info(f"  Last Smoothed Qty: {last_smoothing_dict[symbol]:.4f}, last Smoothing Timestamp: {last_smoothing_timestamp}")
         logger.info(f"  Hedged Qty: {hedge_qty:.4f}")
         logger.info(f"  Difference: {difference:.4f} ({percentage_diff:.2f}%)")
-        logger.info(f"  Net/Gross Ratio: {net_gross_ratio:.2f}")
+        logger.info(f"  Net/Gross Ratio MA: {net_gross_ratio_ma:.2f}")
 
         # Calculate USD difference using batched prices
         price_usd = prices.get(symbol, 1.0)
@@ -384,7 +389,7 @@ def check_hedge_rebalance():
                         f"Last Smoothed Qty: {last_smoothing_dict[symbol]:.4f}, last Smoothing Timestamp: {last_smoothing_timestamp} \n"
                         f"positive_trigger={positive_trigger}, negative_trigger={negative_trigger}, min_usd_trigger={min_usd_trigger},smoothing_lookback_hrs={qty_smoothing_lookback}"
                         f"Action: Sell {lp_qty:.5f} \n"
-                        f"Net/Gross Ratio: {net_gross_ratio:.2f} \n"
+                        f"Net/Gross Ratio MA: {net_gross_ratio_ma:.2f} \n"
                         f"Timestamp: {timestamp_for_csv}"
                     )
                     TGMessenger.send(message,'LP eagle')
@@ -399,7 +404,7 @@ def check_hedge_rebalance():
                         f"Last Smoothed Qty: {last_smoothing_dict[symbol]:.4f}, last Smoothing Timestamp: {last_smoothing_timestamp} \n"
                         f"positive_trigger={positive_trigger}, negative_trigger={negative_trigger}, min_usd_trigger={min_usd_trigger},smoothing_lookback_hrs={qty_smoothing_lookback}"
                         f"Action: Sell {rebalance_value:.5f} \n"
-                        f"Net/Gross Ratio: {net_gross_ratio:.2f} \n"
+                        f"Net/Gross Ratio MA: {net_gross_ratio_ma:.2f} \n"
                         f"Timestamp: {timestamp_for_csv}"
                         )
                         TGMessenger.send(message,'LP eagle')
@@ -441,6 +446,7 @@ def check_hedge_rebalance():
             "Difference": difference,
             "Percentage Diff": round(percentage_diff, 2),
             "Net/Gross Ratio": round(net_gross_ratio, 2),
+            "Net/Gross Ratio MA": round(net_gross_ratio_ma, 2),
             "Rebalance Action": rebalance_action,
             "Rebalance Value": round(rebalance_value, 5),
             "Auto Hedge": is_auto,
@@ -456,7 +462,7 @@ def check_hedge_rebalance():
         
         headers = [
             "Timestamp", "Token", "LP Qty", "LP Qty MA", "Hedged Qty", "Difference",
-            "Percentage Diff", "USD Difference", "Net/Gross Ratio",
+            "Percentage Diff", "USD Difference", "Net/Gross Ratio","Net/Gross Ratio MA",
             "Rebalance Action", "Rebalance Value", "Auto Hedge", "Trigger Auto Order"
         ]
         

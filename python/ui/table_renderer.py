@@ -360,7 +360,8 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
                 # Calculate Net/Gross Ratio (%) : ((lp_qty + hedge_qty) / (lp_qty - hedge_qty)) * 100
                 net_gross_ratio = row["Net/Gross Ratio"] * 100
-                suggested_hedge_ratio = ((lp_qty_smoothed + hedged_qty)/(lp_qty_smoothed - hedged_qty)) * 100
+                net_gross_ratio_ma = row["Net/Gross Ratio MA"] * 100
+                
                 # Calculate Suggested Hedge Qty/LP Qty (%)
                 if is_auto:
                     rebalance_value = np.nan
@@ -383,7 +384,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     rebalance_value = np.nan
                     action = ""
                     net_gross_ratio = np.nan
-                    suggested_hedge_ratio = np.nan
+                    net_gross_ratio_ma = np.nan
 
                 hedge_button = None
                 close_button = None
@@ -419,7 +420,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     f"{hedge_amount:.0f}" if pd.notna(hedge_amount) else "N/A",
                     f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
                     f"{net_gross_ratio:.0f}%" if pd.notna(net_gross_ratio) else "N/A",
-                    f"{suggested_hedge_ratio:.0f}%" if pd.notna(suggested_hedge_ratio) else "N/A",
+                    f"{net_gross_ratio_ma:.0f}%" if pd.notna(net_gross_ratio_ma) else "N/A",
                     button,
                     f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
                 ])
@@ -461,7 +462,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
                 # Calculate Net/Gross Ratio (%) : ((lp_qty + hedge_qty) / (lp_qty - hedge_qty)) * 100
                 net_gross_ratio = row["Net/Gross Ratio"] * 100
-                suggested_hedge_ratio = ((lp_qty_smoothed + hedged_qty)/(lp_qty_smoothed - hedged_qty)) * 100
+                net_gross_ratio_ma = row["Net/Gross Ratio MA"] * 100
                 action = ""
                 rebalance_value = np.nan
                 
@@ -490,7 +491,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                     f"{hedge_amount:.0f}" if pd.notna(hedge_amount) else "N/A",
                     f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
                     f"{net_gross_ratio:.0f}%" if pd.notna(net_gross_ratio) else "N/A",
-                    f"{suggested_hedge_ratio:.0f}%" if pd.notna(suggested_hedge_ratio) else "N/A",
+                    f"{net_gross_ratio_ma:.0f}%" if pd.notna(net_gross_ratio_ma) else "N/A",
                     button,
                     f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
                 ])
