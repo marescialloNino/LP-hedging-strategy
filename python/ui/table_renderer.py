@@ -306,7 +306,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
     if "Rebalancing" in dataframes or "Hedging" in dataframes:
         token_headers = [
             "Token", "LP Amount USD","LP Smoothed USD", "Hedge Amount USD", "LP Qty", 
-            "Net/Gross Ratio (%)", "Rebalance Qty (MA)/LP Qty (%)", 
+            "Net/Gross Ratio (%)", "Net/Gross MA (%)", 
             "Action", "Funding Rate (BIPS)"
         ]
         token_data = []
@@ -360,12 +360,12 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
                 # Calculate Net/Gross Ratio (%) : ((lp_qty + hedge_qty) / (lp_qty - hedge_qty)) * 100
                 net_gross_ratio = row["Net/Gross Ratio"] * 100
-
+                suggested_hedge_ratio = ((lp_qty_smoothed + hedged_qty)/(lp_qty_smoothed - hedged_qty)) * 100
                 # Calculate Suggested Hedge Qty/LP Qty (%)
                 if is_auto:
                     rebalance_value = np.nan
                     action = ""
-                    suggested_hedge_ratio = np.nan
+                    
                 else:
                     action = row["Rebalance Action"].strip().lower() if pd.notna(row["Rebalance Action"]) else ""
                     rebalance_value = row["Rebalance Value"] if pd.notna(row["Rebalance Value"]) else np.nan
@@ -373,7 +373,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                         rebalance_value = abs(rebalance_value) if pd.notna(rebalance_value) else np.nan
                     elif action == "sell":
                         rebalance_value = -abs(rebalance_value) if pd.notna(rebalance_value) else np.nan
-                    suggested_hedge_ratio = (rebalance_value/hedged_qty) * 100 if pd.notna(hedged_qty) and hedged_qty != 0 else np.nan
+                    
 
                 # Error handling for hedging data
                 if hedging_error:
@@ -461,9 +461,10 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
                 # Calculate Net/Gross Ratio (%) : ((lp_qty + hedge_qty) / (lp_qty - hedge_qty)) * 100
                 net_gross_ratio = row["Net/Gross Ratio"] * 100
+                suggested_hedge_ratio = ((lp_qty_smoothed + hedged_qty)/(lp_qty_smoothed - hedged_qty)) * 100
                 action = ""
                 rebalance_value = np.nan
-                suggested_hedge_ratio = np.nan
+                
 
                 action_buttons = []
                 if not is_auto and abs(hedged_qty) > 0:
@@ -511,7 +512,7 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
 def render_hedge_automation():
     """
-    Prepare checkbox options for hedgeable tokens and ensure auto_hedge_tokens.json is synced.
+    Prepare checkbox  options for hedgeable tokens and ensure auto_hedge_tokens.json is synced.
     Returns: tuple of (options, auto_hedge_tokens)
         - options: List of checkbox options for PyWebIO.
         - auto_hedge_tokens: Current auto-hedge tokens dictionary.

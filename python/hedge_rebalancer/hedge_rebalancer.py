@@ -261,7 +261,6 @@ async def get_token_prices_usd(symbols):
 
 def check_hedge_rebalance():
     """Compare LP quantities with absolute hedge quantities using net/gross ratio and output results."""
-    """Compare LP quantities with absolute hedge quantities using net/gross ratio and output results."""
     # Load triggers from centralized config
     config = get_config()
     config_hr = config.get('hedge_rebalancer', {})
