@@ -412,18 +412,19 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 else:
                     button = put_text("Auto" if is_auto else "No action needed")
 
-                token_data.append([
-                    token,
-                    lp_amount_usd,  # Store raw value for sorting
-                    f"{lp_amount_usd:.0f}" if pd.notna(lp_amount_usd) else "N/A",
-                    f"{lp_smoothed_amount_usd:.0f}" if pd.notna(lp_smoothed_amount_usd) else "N/A",
-                    f"{hedge_amount:.0f}" if pd.notna(hedge_amount) else "N/A",
-                    f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
-                    f"{net_gross_ratio:.0f}%" if pd.notna(net_gross_ratio) else "N/A",
-                    f"{net_gross_ratio_ma:.0f}%" if pd.notna(net_gross_ratio_ma) else "N/A",
-                    button,
-                    f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
-                ])
+                if lp_amount_usd > 100 or lp_smoothed_amount_usd > 100 or (abs(hedge_amount) > 10 and not pd.isna(hedge_amount)):
+                    token_data.append([
+                        token,
+                        lp_amount_usd,  # Store raw value for sorting
+                        f"{lp_amount_usd:.0f}" if pd.notna(lp_amount_usd) else "N/A",
+                        f"{lp_smoothed_amount_usd:.0f}" if pd.notna(lp_smoothed_amount_usd) else "N/A",
+                        f"{hedge_amount:.0f}" if pd.notna(hedge_amount) else "N/A",
+                        f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
+                        f"{net_gross_ratio:.0f}%" if pd.notna(net_gross_ratio) else "N/A",
+                        f"{net_gross_ratio_ma:.0f}%" if pd.notna(net_gross_ratio_ma) else "N/A",
+                        button,
+                        f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
+                    ])
 
         elif "Hedging" in dataframes and not hedging_error:
             hedging_df = dataframes["Hedging"]
@@ -483,18 +484,19 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 else:
                     button = put_text("Auto" if is_auto else "No action needed")
 
-                token_data.append([
-                    token,
-                    lp_amount_usd,  # Store raw value for sorting
-                    f"{lp_amount_usd:.0f}" if pd.notna(lp_amount_usd) else "N/A",
-                    f"{lp_smoothed_amount_usd:.0f}" if pd.notna(lp_smoothed_amount_usd) else "N/A",
-                    f"{hedge_amount:.0f}" if pd.notna(hedge_amount) else "N/A",
-                    f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
-                    f"{net_gross_ratio:.0f}%" if pd.notna(net_gross_ratio) else "N/A",
-                    f"{net_gross_ratio_ma:.0f}%" if pd.notna(net_gross_ratio_ma) else "N/A",
-                    button,
-                    f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
-                ])
+                if lp_amount_usd > 100 or lp_smoothed_amount_usd > 100 or (abs(hedge_amount) > 10 and not pd.isna(hedge_amount)):
+                    token_data.append([
+                        token,
+                        lp_amount_usd,  # Store raw value for sorting
+                        f"{lp_amount_usd:.0f}" if pd.notna(lp_amount_usd) else "N/A",
+                        f"{lp_smoothed_amount_usd:.0f}" if pd.notna(lp_smoothed_amount_usd) else "N/A",
+                        f"{hedge_amount:.0f}" if pd.notna(hedge_amount) else "N/A",
+                        f"{lp_qty:.4f}" if pd.notna(lp_qty) else "N/A",
+                        f"{net_gross_ratio:.0f}%" if pd.notna(net_gross_ratio) else "N/A",
+                        f"{net_gross_ratio_ma:.0f}%" if pd.notna(net_gross_ratio_ma) else "N/A",
+                        button,
+                        f"{funding_rate:.0f}" if pd.notna(funding_rate) else "N/A"
+                    ])
 
         if token_data:
             # Sort token_data by lp_amount_usd (index 1) in descending order, handling "N/A" values
