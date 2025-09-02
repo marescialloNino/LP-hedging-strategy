@@ -388,22 +388,22 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
 
                 hedge_button = None
                 close_button = None
-                if not is_auto and action in ["buy", "sell"] and pd.notna(rebalance_value) and not hedging_error:
-                    hedge_button = put_buttons(
-                        [{'label': 'Hedge', 'value': f"hedge_{token}", 'color': 'primary'}],
-                        onclick=lambda v, t=token, rv=abs(rebalance_value), a=action: run_async(
-                            hedge_actions.handle_hedge_click(t, rv, a)
-                        )
-                    )
-                if not is_auto and abs(hedged_qty) != 0 and not pd.isna(hedged_qty) and not hedging_error:
-                    close_button = put_buttons(
-                        [{'label': 'Close', 'value': f"close_{token}", 'color': 'danger'}],
-                        onclick=lambda v, t=token, hq=hedged_qty: run_async(
-                            hedge_actions.handle_close_hedge(t, hq, dataframes.get("Hedging"))
-                        )
-                    )
 
                 if lp_amount_usd > 100 or lp_smoothed_amount_usd > 100 or (abs(hedge_amount) > 10 and not pd.isna(hedge_amount)):
+                    if not is_auto and action in ["buy", "sell"] and pd.notna(rebalance_value) and not hedging_error:
+                        hedge_button = put_buttons(
+                            [{'label': 'Hedge', 'value': f"hedge_{token}", 'color': 'primary'}],
+                            onclick=lambda v, t=token, rv=abs(rebalance_value), a=action: run_async(
+                                hedge_actions.handle_hedge_click(t, rv, a)
+                            )
+                        )
+                    if not is_auto and abs(hedged_qty) != 0 and not pd.isna(hedged_qty) and not hedging_error:
+                        close_button = put_buttons(
+                            [{'label': 'Close', 'value': f"close_{token}", 'color': 'danger'}],
+                            onclick=lambda v, t=token, hq=hedged_qty: run_async(
+                                hedge_actions.handle_close_hedge(t, hq, dataframes.get("Hedging"))
+                            )
+                        )
                     if hedge_button or close_button:
                         button = put_row([
                             hedge_button if hedge_button else put_text(""),
