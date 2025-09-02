@@ -403,16 +403,15 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                         )
                     )
 
-                if hedge_button or close_button:
-                    button = put_row([
-                        hedge_button if hedge_button else put_text(""),
-                        put_text(" "),
-                        close_button if close_button else put_text("")
-                    ], size='auto 5px auto')
-                else:
-                    button = put_text("Auto" if is_auto else "No action needed")
-
                 if lp_amount_usd > 100 or lp_smoothed_amount_usd > 100 or (abs(hedge_amount) > 10 and not pd.isna(hedge_amount)):
+                    if hedge_button or close_button:
+                        button = put_row([
+                            hedge_button if hedge_button else put_text(""),
+                            put_text(" "),
+                            close_button if close_button else put_text("")
+                        ], size='auto 5px auto')
+                    else:
+                        button = put_text("Auto" if is_auto else "No action needed")
                     token_data.append([
                         token,
                         lp_amount_usd,  # Store raw value for sorting
@@ -466,25 +465,27 @@ def render_hedging_table(dataframes, error_flags, hedge_actions):
                 net_gross_ratio_ma = row["Net/Gross Ratio MA"] * 100
                 action = ""
                 rebalance_value = np.nan
-                
-
-                action_buttons = []
-                if not is_auto and abs(hedged_qty) > 0:
-                    action_buttons.append({'label': 'Close', 'value': f"close_{token}", 'color': 'danger'})
-                if not is_auto and action in ["buy", "sell"] and not pd.isna(rebalance_value):
-                    action_buttons.append({'label': 'Hedge', 'value': f"hedge_{token}", 'color': "primary"})
-
-                if action_buttons:
-                    button = put_buttons(
-                        action_buttons,
-                        onclick=lambda v, t=token, hq=hedged_qty, rv=abs(rebalance_value) if pd.notna(rebalance_value) else 0, a=action: run_async(
-                            hedge_actions.handle_hedge_click(t, rv, a) if 'hedge' in v else hedge_actions.handle_close_hedge(t, hq, dataframes.get("Hedging"))
-                        )
-                    )
-                else:
-                    button = put_text("Auto" if is_auto else "No action needed")
 
                 if lp_amount_usd > 100 or lp_smoothed_amount_usd > 100 or (abs(hedge_amount) > 10 and not pd.isna(hedge_amount)):
+                    action_buttons = []
+                    if not is_auto and abs(hedged_qty) > 0:
+                        action_buttons.append({'label': 'Close', 'value': f"close_{token}", 'color': 'danger'})
+                    if not is_auto and action in ["buy", "sell"] and not pd.isna(rebalance_value):
+                        action_buttons.append({'label': 'Hedge', 'value': f"hedge_{token}", 'color': "primary"})
+
+                    if action_buttons:
+                        button = put_buttons(
+                            action_buttons,
+                            onclick=lambda v, t=token, hq=hedged_qty,
+                                           rv=abs(rebalance_value) if pd.notna(rebalance_value) else 0,
+                                           a=action: run_async(
+                                hedge_actions.handle_hedge_click(t, rv,
+                                                                 a) if 'hedge' in v else hedge_actions.handle_close_hedge(
+                                    t, hq, dataframes.get("Hedging"))
+                            )
+                        )
+                    else:
+                        button = put_text("Auto" if is_auto else "No action needed")
                     token_data.append([
                         token,
                         lp_amount_usd,  # Store raw value for sorting
